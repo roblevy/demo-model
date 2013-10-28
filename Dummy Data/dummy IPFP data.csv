@@ -1,0 +1,7 @@
+country_iso3,sector,trade_flow,value
+X,s,Import,20
+X,s,Export,15
+Y,s,Import,2
+Y,s,Export,7
+Z,s,Import,5
+Z,s,Export,5
