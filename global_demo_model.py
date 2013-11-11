@@ -40,6 +40,13 @@ class GlobalDemoModel(object):
         return pd.concat(x, 1)
     
     def recalculate_world(self):
+        """ 
+        Runs the iterative process to calculate each country's ipmort
+        requirements, use the import propensities to calculate export requirements
+        per sector-country, and apply these export requirements to each country's
+        input-output model. This process is repeated at most __MAX_ITERATIONS__ times,
+        or until the global trade deficit < __DEFICIT_TOLERANCE__
+        """
         countries = self.countries
         for i in range(__MAX_ITERATIONS__):            
             self._assemble_world_matrices()

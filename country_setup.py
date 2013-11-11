@@ -13,32 +13,30 @@ import pandas as pd
 global __IMPORT_PREFIX
 __IMPORT_PREFIX = "IM:"
 
-def create_countries_from_io_data(data):
-    """Given a list of data, creates all the necessary Country objects"""
-    
-    data = _preprocess_data(data)    
-    countries = {'RoW':_create_RoW_country(pd.unique(data['from']),pd.unique(data['to']))}    
-    for iso3, dat in data.groupby("country_iso3", sort=False):
-        countries[iso3] = _create_country_from_data(iso3, dat)
-    print (countries)
-    return countries
+def technical_coefficients_from_sector_flows(year_country_sector_flows):
+    """
+    Take a pandas DataFrame containing the output from
+    vw_sector_flows for a given year and creates a dictionary
+    of technical coefficients matrices, each labelled with
+    the ISO3 code of the relevant country
+    """
+    technical_coefficients = {}
+    for iso3, flows in year_country_sector_flows.groupby("country_iso3", sort=False):
+        technical_coefficients[iso3] = _technical_coefficients(flows)
+    return technical_coefficients
 
-def _preprocess_data(data):
-    """ Prefix the "from" column with IMPORT_PREFIX for imports
-    Add the group number onto the from and to columns
-    Get rid of Value Added"""
+def _technical_coefficients(country_sector_flows):
+    x = country_sector_flows[country_sector_flows['from_production_sector']].groupby('from_sector').aggregate({'flow_amount':sum})['flow_amount']
+    production_flows = (country_sector_flows[country_sector_flows['from_production_sector'] 
+        & country_sector_flows['to_production_sector']])
+    Z = production_flows.groupby(['from_sector','to_sector']).aggregate({'flow_amount':sum})['flow_amount']
+    Z = Z.unstack()
+    xhat = (1/x) * pandas_eye(x)
+    return Z.dot(xhat)
     
-    data = data[data['from'] != 'VA']    
-#    data['from'] = (data['from_sector_group_number'] + " " 
-#                    + data['from'])
-    data['from'][data.is_import] = (__IMPORT_PREFIX + 
-                                    data['from'][data.is_import])
-#    data['to'] = data['to_sector_group_number'] + " " + data['to']
-    data = data.drop("is_import",1)
-    data = data.drop("from_sector_group_number", 1)
-    data = data.drop("to_sector_group_number", 1)    
-
-    return data
+def pandas_eye(df):
+    i = np.eye(df.shape[0])
+    return pd.DataFrame(i, df.index, df.index)
 
 def _create_country_from_data(iso3, data):
     """Takes one country-worth of data and returns 
