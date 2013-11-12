@@ -11,7 +11,7 @@ __INIT_VALUE__ = 1.0
 __EXPORT_CODE__ = 'Export'
 __IMPORT_CODE__ = 'Import'
 __WITH_RoW__ = True
-__MAX_ITERATIONS__ = 300
+__MAX_ITERATIONS__ = 50
 
 
 def estimate_services_trade_flows(data):
@@ -57,8 +57,8 @@ def _initial_trade_flow_matrices(data, sectors, countries):
         Y[sector] = _initial_trade_flow_matrix(sector, countries, import_deficit < 0)
     return Y
 
-def _initial_trade_flow_matrix(sector, countries, im_greater_than_ex):
-    """
+def _initial_trade_flow_matrix(sector, countries, im_exceed_ex):
+    """n
     For three countries, A,B,C and an __INIT_VALUE__ of 1 produces
     one of two types of matrix. First, if imports exceed exports:
         A B C
@@ -78,8 +78,15 @@ def _initial_trade_flow_matrix(sector, countries, im_greater_than_ex):
     Y_s = np.ones([num_countries,num_countries]) * __INIT_VALUE__
     Y_s = Y_s * (1 - (np.eye(num_countries))) # Set diagonals to zero
     RoW = np.ones(len(countries)) * __INIT_VALUE__
-    Y_s = np.vstack([Y_s,RoW]) # Add a row on the bottom for RoW
-    df_Y = pd.DataFrame(Y_s, index=countries, columns=countries)
+    if im_exceed_ex:
+        Y_s = np.vstack([Y_s,RoW]) # Add a row on the bottom for RoW
+        row_names = np.append(countries,'RoW')
+        col_names = countries
+    else:
+        Y_s = np.column_stack([Y_s,RoW])
+        row_names = countries
+        col_names = np.append(countries,'RoW')
+    df_Y = pd.DataFrame(Y_s, index=row_names, columns=col_names)
     df_Y.index.name = "from_iso3"
     df_Y.columns.name = "to_iso3"
     df_Y.name = sector
@@ -110,7 +117,7 @@ def _services_flow_data(data, countries, sectors, num_iterations):
     matrix from country to country per sector. """
     data = data.set_index(['sector','trade_flow','country_iso3'])    
     eps = 0.1
-    alpha = 0.1
+    alpha = 0.0
     Y = _initial_trade_flow_matrices(data, sectors, countries)
     
     print "Estimating services flow matrix..."
@@ -132,9 +139,10 @@ def _services_flow_data(data, countries, sectors, num_iterations):
             print "Failed to converge!"
             break
         else:
-            print "stopped after %i iterations. Converged: %s" % (iteration,
-                                                                  np.allclose(Y_s.sum(0), row_targets) 
-                                                                  & np.allclose(Y_s.sum(1), col_targets)
+            print "stopped after %i iterations. Converged: %s" % (
+                iteration,
+                np.allclose((Y_s.sum(0) - col_targets).dropna(), 0, atol=1)
+                & np.allclose((Y_s.sum(1).dropna() - row_targets).dropna(), 0, atol=1)
                                                                   )
         Y[sector] = Y_s
     return _long_format_services_flow_data(Y)
@@ -172,13 +180,14 @@ def _long_format_services_flow_data(data):
     long_format = pd.DataFrame()    
     for sector in data.keys():
         Y_s = data[sector]
-        long_Y = Y_s.stack() # Creates long-format data
-        long_Y.name = 'trade_value'
-        long_Y = long_Y.reset_index() # Converts pandas MultiIndex into normal DataFrame
+        long_Y = pd.DataFrame(Y_s.stack()) # Creates long-format data
+        long_Y.columns = ["trade_flow"]
         long_Y['sector'] = sector # Add a sector column
         long_format = pd.concat([long_format, long_Y])
     # Get rid of the rows where from_iso3 = to_iso3
     long_format = long_format[long_format.from_iso3 != long_format.to_iso3]
+    # Get rid of zero flows
+    long_format = long_format[long_format['trade_value'] > 0]
     # Reorder the columns and it's ready to go!
     return pd.DataFrame(long_format, 
                         columns=['from_iso3','to_iso3','sector','trade_value'])
