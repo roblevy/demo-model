@@ -6,7 +6,7 @@ Created on Tue Jul 02 14:02:49 2013
 """
 import pandas as pd
 
-def calculate_import_propensities(countries, trade_data):
+def calculate_import_propensities(trade_data, countries):
     """ Calculate import propensities by the following algorithm:
     1. Split the trade data into importer and sector
     2. Sum the trade value of each group
@@ -15,22 +15,29 @@ def calculate_import_propensities(countries, trade_data):
     cannot be calculated in this way. We therefore set all import propensities
     to zero apart from that associated with RoW
     """
-    sectors = countries[countries.keys()[0]].D.index.values
+    td = trade_data.copy()    
+    sectors = pd.unique(trade_data['sector'])
     
     P = {}
-    g = trade_data.groupby(['to_iso3','sector_group_short_name'])
-    div_by_sum = lambda(x): x / sum(x)
-    trade_data['p_j'] = g['value'].apply(div_by_sum)
-
-    for sector in sectors:
-        sector_data = trade_data[trade_data['sector_group_short_name'] == sector]
-        ## Initialise P[sector]
-        P[sector] = pd.DataFrame(0.0, index=countries.keys(), columns=countries.keys())
-        for row_number in sector_data.index:
-            _populate_P(P[sector], sector_data[sector_data.index==row_number])
-        _set_countries_which_import_from_themselves(P[sector])
-
-        
+    td = td.set_index(['sector','to_iso3'])
+    td['import_totals'] = trade_data.groupby(['sector','to_iso3']).aggregate(sum)
+    
+    # Calculate each individual import propensity
+    td['p_j'] = td['trade_value'].astype('float') / td['import_totals']
+    td = td.set_index('from_iso3',append=True)
+    # 'Unstack' the table. This creates a matrix with from_iso3 down the left
+    # and to_iso3 along the top
+    p_matrices = td['p_j'].unstack(1)
+    
+    # Now create the P matrices    
+    for sector in sectors:  
+        P_i = pd.DataFrame(0,index=countries,columns=countries)
+        P_i = P_i.add(p_matrices.ix[sector],fill_value=0)
+        # Any columns which don't sum to unity, get the remainder
+        # Coming from the RoW
+        col_sums = P_i.sum(0)
+        P_i.ix['RoW'][col_sums < 1] = 1
+        P[sector] = P_i    
     return P
 
         
