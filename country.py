@@ -21,7 +21,7 @@ class Country(object):
       6. d: a vector of import ratios, defining what proportion of the total demand
             for a given sector output is supplied by imports vs. produced domestically
     """
-    def __init__(self, name, f, e, i
+    def __init__(self, name, f, e, i,
                  technical_coefficients, 
                  import_propensities, 
                  import_ratios):

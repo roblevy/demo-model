@@ -181,7 +181,7 @@ def _long_format_services_flow_data(data):
     for sector in data.keys():
         Y_s = data[sector]
         long_Y = pd.DataFrame(Y_s.stack()) # Creates long-format data
-        long_Y.columns = ["trade_flow"]
+        long_Y.columns = ["trade_value"]
         long_Y.index.names = ('from_iso3','to_iso3')
         long_Y = long_Y.reset_index()
         long_Y['sector'] = sector # Add a sector column
@@ -190,8 +190,8 @@ def _long_format_services_flow_data(data):
     # Get rid of the rows where from_iso3 = to_iso3
     long_format = long_format[long_format.from_iso3 != long_format.to_iso3]
     # Get rid of zero flows
-    long_format = long_format[long_format['trade_flow'] > 0]
+    long_format = long_format[long_format['trade_value'] > 0]
     # Reorder the columns and it's ready to go!
     return pd.DataFrame(long_format, 
-                        columns=['from_iso3','to_iso3','sector','trade_flow'])
+                        columns=['from_iso3','to_iso3','sector','trade_value'])
         
