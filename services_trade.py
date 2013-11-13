@@ -11,7 +11,7 @@ __INIT_VALUE__ = 1.0
 __EXPORT_CODE__ = 'Export'
 __IMPORT_CODE__ = 'Import'
 __WITH_RoW__ = True
-__MAX_ITERATIONS__ = 50
+__MAX_ITERATIONS__ = 500
 
 
 def estimate_services_trade_flows(data):
@@ -116,7 +116,7 @@ def _services_flow_data(data, countries, sectors, num_iterations):
     function runs an iterative process to produce an actual flow
     matrix from country to country per sector. """
     data = data.set_index(['sector','trade_flow','country_iso3'])    
-    eps = 0.1
+    eps = 1
     alpha = 0.0
     Y = _initial_trade_flow_matrices(data, sectors, countries)
     
@@ -182,13 +182,16 @@ def _long_format_services_flow_data(data):
         Y_s = data[sector]
         long_Y = pd.DataFrame(Y_s.stack()) # Creates long-format data
         long_Y.columns = ["trade_flow"]
+        long_Y.index.names = ('from_iso3','to_iso3')
+        long_Y = long_Y.reset_index()
         long_Y['sector'] = sector # Add a sector column
         long_format = pd.concat([long_format, long_Y])
+        long_format.reset_index()
     # Get rid of the rows where from_iso3 = to_iso3
     long_format = long_format[long_format.from_iso3 != long_format.to_iso3]
     # Get rid of zero flows
-    long_format = long_format[long_format['trade_value'] > 0]
+    long_format = long_format[long_format['trade_flow'] > 0]
     # Reorder the columns and it's ready to go!
     return pd.DataFrame(long_format, 
-                        columns=['from_iso3','to_iso3','sector','trade_value'])
+                        columns=['from_iso3','to_iso3','sector','trade_flow'])
         

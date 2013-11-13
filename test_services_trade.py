@@ -13,12 +13,4 @@ data = pd.read_csv('../Data/40 Countries/2010/vw_services_totals.csv')
 
 balanced_services = services_trade.estimate_services_trade_flows(data)
 
-#total_balanced_imports = trade_flows.groupby(['to','sector']).sum()
-#total_balanced_exports = trade_flows.groupby(['from','sector']).sum()
-#flow_matrix = trade_flows.pivot(index='from', columns='to', values='flow_value')
-#print scaled_data
-#print trade_flows
-#print "Total balanced imports: " 
-#print total_balanced_imports
-#print "Total balanced exports:"
-#print total_balanced_exports
+balanced_services.to_csv('../Data/200 Countries/Balanced Services/balanced_services_2010.csv')
