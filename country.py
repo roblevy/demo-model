@@ -16,21 +16,17 @@ class Country(object):
       3. i: a vector of import requirements
       4. A: a matrix of technical coefficients describing the 'recipe' of sector inputs
             required to make one unit of sector output
-      5. P: a matrix of import propensities, with rows relating to countries and
-            columns relating to sectors
-      6. d: a vector of import ratios, defining what proportion of the total demand
+      5. d: a vector of import ratios, defining what proportion of the total demand
             for a given sector output is supplied by imports vs. produced domestically
     """
     def __init__(self, name, f, e, i,
                  technical_coefficients, 
-                 import_propensities, 
                  import_ratios):
         self.name = name
         self.f = f
         self.e = e
         self.i = i
         self.A = technical_coefficients
-        self.P = import_propensities
         self.d = import_ratios
   
     def __repr__(self):

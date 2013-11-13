@@ -62,12 +62,7 @@ def _create_country_from_data(iso3, data):
     i = M.sum(1) # Row sums
     # Get rid of the __IMPORT_PREFIX from i's row names:
     i = i.rename(_remove_import_prefix)
-    
-    # Now T, the actual input-output table
-    T_domestic = domestic.pivot("from", "to", "flow_amount")
-    T_imports = imports.pivot("from", "to", "flow_amount")
-    T = pd.concat([T_domestic, T_imports])
-    
+        
     # Now B_dagger, the inter-sector flow matrix
     inter_sector_data = domestic[~(domestic.to.str.contains('EX')) & ~(domestic.to.str.contains('FD'))]    
     B_dagger = _sector_data_to_matrix(inter_sector_data)
@@ -77,7 +72,6 @@ def _create_country_from_data(iso3, data):
     B_star = _sector_data_to_matrix(inter_sector_import_data)
     
     # The complete inter-sector flow matrix (domestic AND imported)
-    B = pd.concat([B_dagger, B_star])    
     B_star = B_star.rename(_remove_import_prefix) # Get rid of pesky import prefixes
     
     # And the vector of exports, e
@@ -92,7 +86,6 @@ def _create_country_from_data(iso3, data):
     D = _calculate_import_ratios(x, i)
     
     # Now calculate A
-    F = f + e # total demand for each product
     xhat = diagonalise(1./x)
     A = (B_dagger + B_star).dot(xhat)
       
@@ -108,24 +101,32 @@ def _create_RoW_country(data, countries, sectors):
     flows not going to a country in countries. Similar with exports.
     Import propensities are then calculated as normal. Final Demand
     is set to be identical to imports. Investments are 0."""
+    
+    countries.append('RoW')
     df_countries = pd.DataFrame({'iso3':countries,'matched':True})
+
     # Flows from countries in 'countries'
     from_known = data.merge(df_countries,how='inner',left_on='from_iso3',right_on='iso3')
     from_known = from_known.drop(['iso3','matched'],1)
+
     # Flows to countries not in 'countries'
     stray_exports = from_known.merge(df_countries,how='left',left_on='to_iso3',right_on='iso3')
     stray_exports = stray_exports[pd.isnull(stray_exports['matched'])]
+
     # Flows to countries in 'countries'
     to_known = data.merge(df_countries,how='inner',left_on='to_iso3',right_on='iso3')
     to_known = to_known.drop(['iso3','matched'],1)
+
     # Flows from countries not in 'countries'
-    stray_imports = from_known.merge(df_countries,how='left',left_on='from_iso3',right_on='iso3')
-    stray_imports = stray_exports[pd.isnull(stray_imports['matched'])]
+    stray_imports = to_known.merge(df_countries,how='left',left_on='from_iso3',right_on='iso3')
+    stray_imports = stray_imports[pd.isnull(stray_imports['matched'])]
     
+    # Create RoW imports and exports
     RoW_imports = stray_exports.groupby('sector').aggregate(sum)
     RoW_exports = stray_imports.groupby('sector').aggregate(sum)
     
-    RoW_import_propensities = import_propensities.calculate_import_propensities()
+    RoW = Country('RoW',f=RoW_imports,e=RoW_exports,i=RoW_imports)
+    
  
 def _sector_data_to_matrix(data):
     """Takes a DataFrame with from and to (sectors or sector
