@@ -31,6 +31,8 @@ class Country(object):
             self._I = self.A * 0 + np.eye(self.A.shape[0])
             self.D = self._I * self.d
             self.recalculate_economy(self.f, self.e)
+        else:
+            self._I = 0
   
     def __repr__(self):
         return ' '.join(["Country:", self.name])
@@ -39,27 +41,34 @@ class Country(object):
         return ' '.join(["Country:", self.name])
         
     def recalculate_economy(self, final_demand, exports, investments=None):
+        """
+        Run the algorithm outlined in the section 'Model Algorithm' of the
+        paper.        
+        """
+        
         if investments is None:
             investments = (exports * 0)
             investments.name = "Investments"
         total_demand = final_demand + exports + investments
-        x = self._domestic_reqs(total_demand)
-        i = self._import_reqs(x, total_demand)
+        if self.name == 'RoW':
+            # See section: Calibration of 'Rest of World' entity in the paper
+            self.x = self._RoW_domestic_reqs(exports)
+            self.i = self._RoW_import_reqs(final_demand)
+        else:
+            self.x = self._domestic_reqs(total_demand)
+            self.i = self._import_reqs(self.x, total_demand)
+            self.f_star = self.D.dot(self.f)
+            self.f_dagger = (self._I - self.D).dot(self.f)
+            
+#            xhat = diagonalise(x)        
+#            self.B = self.A.dot(xhat) # Total flows = A.xhat
+#            self.B_dagger = self.B.dot(self.D) 
+#            self.B_star = self.B.dot(I - self.D)
 
         # Update Country-level variables:
-        I = self._I  
-        self.x = x
-        self.i = i
         self.n = investments
         self.e = exports
         self.f = final_demand
-        self.f_star = self.D.dot(self.f)
-        self.f_dagger = (I - self.D).dot(self.f)
-        
-        xhat = diagonalise(x)        
-        self.B = self.A.dot(xhat) # Total flows = A.xhat
-        self.B_dagger = self.B.dot(self.D) 
-        self.B_star = self.B.dot(I - self.D)
                                 
     def _import_reqs(self, domestic_requirements, total_demand):
         """
@@ -96,13 +105,11 @@ class Country(object):
         
         return x
                 
-
-    def _add_names(self, names_from, M):
-        """ Takes a blank matrix M and adds the names of the
-        rows/columns from the matrix names_from"""
-        return names_from * 0 + M
+    def _RoW_import_reqs(self,fd):
+        return fd
         
-   
-    
+    def _RoW_domestic_reqs(self, e):
+        return e        
+            
   
 
