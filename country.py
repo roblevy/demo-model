@@ -4,7 +4,6 @@ Created on Wed Jun 19 15:26:10 2013
 
 @author: rob
 """
-
 import numpy as np
 from gdm_library import diagonalise
 
@@ -26,8 +25,12 @@ class Country(object):
         self.f = f
         self.e = e
         self.i = i
-        self.A = technical_coefficients
-        self.d = import_ratios
+        if name != 'RoW':
+            self.A = technical_coefficients
+            self.d = import_ratios
+            self._I = self.A * 0 + np.eye(self.A.shape[0])
+            self.D = self._I * self.d
+            self.recalculate_economy(self.f, self.e)
   
     def __repr__(self):
         return ' '.join(["Country:", self.name])
@@ -39,47 +42,58 @@ class Country(object):
         if investments is None:
             investments = (exports * 0)
             investments.name = "Investments"
-            
         total_demand = final_demand + exports + investments
-        x = self.domestic_reqs(total_demand)
-        i = self.import_reqs(x)
+        x = self._domestic_reqs(total_demand)
+        i = self._import_reqs(x, total_demand)
 
         # Update Country-level variables:
-        I = np.eye(self.A.shape[0])        
+        I = self._I  
         self.x = x
         self.i = i
         self.n = investments
         self.e = exports
         self.f = final_demand
-        self.f_star = self.d.dot(self.f)
-        self.f_dagger = (I - self.d).dot(self.f)
+        self.f_star = self.D.dot(self.f)
+        self.f_dagger = (I - self.D).dot(self.f)
         
         xhat = diagonalise(x)        
         self.B = self.A.dot(xhat) # Total flows = A.xhat
-        self.B_dagger = self.B.dot(self.d) 
-        self.B_star = self.B.dot(I - self.d)
+        self.B_dagger = self.B.dot(self.D) 
+        self.B_star = self.B.dot(I - self.D)
                                 
-    def import_reqs(self, domestic_requirements):
-        """Calculates i = (I + d)^-1 Dx 
-        where d is the matrix of import ratios"""
-        I = np.eye(self.A.shape[0])        
-        d = self.d
+    def _import_reqs(self, domestic_requirements, total_demand):
+        """
+        Calculates i = (I - D)^-1 D.x 
+        where d is the matrix of import ratios.
+        The inverse in the first part of the right-hand-side has no
+        solution where D contains elements = 1. If these are replaced
+        by 0.0 within the inverse only, the import for that product will
+        simply be zero. They can then be retrospectively set to the equivalent
+        total demand. This is safe because if import demand is genuinely zero,
+        then total demand must also be zero.
+        """
+        I = self._I       
+        D = self.D
+        Ddash = D.replace(1,0.0)
         x = domestic_requirements
-        i = np.linalg.solve(I - d, d.dot(x))
+        i = np.linalg.solve(I - Ddash, Ddash.dot(x))
+        i[i==0] = total_demand # set to total_demand where 0
         return i
 
-    def domestic_reqs(self,total_demand):
+    def _domestic_reqs(self,total_demand):
         """calculate the production requirements, x, using the 
         technical coefficients matrix, A, and a given demand total
         demand F, fd + ex + investments.
-        Solves x = [I - (I - d)A]^-1.(I - d)F
+        Solves x = [I - (I - D)A]^-1.(I - D)F
+        The inverse on the right-hand-side has no solution if D has any zero
+        elements.
         """
-        I = np.eye(self.A.shape[0])
+        I = self._I
         A = self.A
         F = total_demand
-        d = self.d
-        x = np.linalg.solve(I - (I - d).dot(A), (I - d).dot(F))
-       
+        D = self.D
+        x = np.linalg.solve(I - (I - D).dot(A), (I - D).dot(F))
+        
         return x
                 
 

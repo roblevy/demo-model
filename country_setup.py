@@ -5,96 +5,82 @@ Created on Mon Jul 01 12:14:04 2013
 @author: Rob
 """
 
-from gdm_library import diagonalise
-from country import Country 
+import country as c
 import import_propensities
-import numpy as np
 import pandas as pd
 
 reload(import_propensities)
+reload(c)
 
-global __IMPORT_PREFIX
-__IMPORT_PREFIX = "IM:"
-
-def technical_coefficients_from_sector_flows(year_country_sector_flows):
+def _get_technical_coefficients(Z,x):
     """
-    Take a pandas DataFrame containing the output from
-    vw_sector_flows for a given year and creates a dictionary
-    of technical coefficients matrices, each labelled with
-    the ISO3 code of the relevant country
+    Calculates A = Zxhat^-1 as per Miller and Blair. The only exception
+    is where total production (x) of a product is zero. In this case
+    the technical coefficient is set to zero.
     """
-    technical_coefficients = {}
-    for iso3, flows in year_country_sector_flows.groupby("country_iso3", sort=False):
-        technical_coefficients[iso3] = _technical_coefficients(flows)
-    return technical_coefficients
+    Z.name = 'flow_value'
+    A = Z.reset_index(['from_sector'])
+    A['x'] = rename_multiindex_level(x,'from_sector','to_sector')
+    A['a'] = A['flow_value'] / A['x']
+    A['a'] = A['a'].fillna(0)
+    A = A.set_index('from_sector',append=True).swaplevel(1,2)
+    return A['a']
+    
+def create_countries_from_data(sector_flows, trade_flows):
+    """
+    Using sector flow data, create:
+      - the import vector, i
+      - the export vector, e,
+      - the matrix of technical coefficients, A
+      - the vector of import ratios, D
+    for all the countries in the data
+    """
+    sector_flows = sector_flows.set_index(['country_iso3','from_sector','to_sector'])
+    flows = sector_flows['flow_amount']
 
-def _technical_coefficients(country_sector_flows):
-    x = country_sector_flows[country_sector_flows['from_production_sector']].groupby('from_sector').aggregate({'flow_amount':sum})['flow_amount']
-    production_flows = (country_sector_flows[country_sector_flows['from_production_sector'] 
-        & country_sector_flows['to_production_sector']])
-    Z = production_flows.groupby(['from_sector','to_sector']).aggregate({'flow_amount':sum})['flow_amount']
-    Z = Z.unstack()
-    xhat = (1/x) * pandas_eye(x)
-    return Z.dot(xhat)
-    
-def pandas_eye(df):
-    i = np.eye(df.shape[0])
-    return pd.DataFrame(i, df.index, df.index)
+    imports = flows[sector_flows['is_import']]
+    final_demand = flows[sector_flows['is_final_demand'] & sector_flows['from_production_sector']]
+    exports = flows[sector_flows['is_export'] & sector_flows['from_production_sector']]
+    domestic = flows[~sector_flows['is_import'] & sector_flows['from_production_sector']]
 
-def _create_country_from_data(iso3, data):
-    """Takes one country-worth of data and returns 
-    a Country object containing all the relevant matrices,
-    A, B_dagger, X, x, i, e, fd and the import ratios"""
-        
-    # We don't need the country_iso3 or year columns any more
-    try:
-        data = data.drop(["country_iso3","year"],1)
-    except:
-        pass            
-
-    # start with production matrices X (domestic) and I (imported)
-    domestic = data[~(data["from"].apply(_is_import))]
-    imports = data[data["from"].apply(_is_import)]
-    
-    X = _sector_data_to_matrix(domestic)
-    M = _sector_data_to_matrix(imports) # M is iMports
-    x = X.sum(1) # Row sums
-    i = M.sum(1) # Row sums
-    # Get rid of the __IMPORT_PREFIX from i's row names:
-    i = i.rename(_remove_import_prefix)
-        
-    # Now B_dagger, the inter-sector flow matrix
-    inter_sector_data = domestic[~(domestic.to.str.contains('EX')) & ~(domestic.to.str.contains('FD'))]    
-    B_dagger = _sector_data_to_matrix(inter_sector_data)
-    
-    # And B_star the import part of the inter-sector flows
-    inter_sector_import_data = imports[~(imports.to.str.contains('EX')) & ~(imports.to.str.contains('FD'))]    
-    B_star = _sector_data_to_matrix(inter_sector_import_data)
-    
-    # The complete inter-sector flow matrix (domestic AND imported)
-    B_star = B_star.rename(_remove_import_prefix) # Get rid of pesky import prefixes
-    
-    # And the vector of exports, e
-    e = _sector_data_to_matrix(domestic[domestic.to.str.contains('EX')])    
-    
-    # Now the final demand vector
-    f_dagger = _sector_data_to_matrix(domestic[domestic.to.str.contains('FD')])
-    f_star = _sector_data_to_matrix(imports[imports.to.str.contains('FD')])
-    f = f_dagger + f_star.values # Total demand = demand for domestic + demand for imported
+    # Domestic production (sum across all to_sector)
+    x = domestic.sum(level=['country_iso3','from_sector'])
+    # Imports (sum across all to_sector)
+    i = imports.sum(level=['country_iso3','from_sector'])
+    # Exports. There are some negative export demands. Set these to zero
+    e = exports.sum(level=['country_iso3','from_sector'])
+    e[e < 0] = 0
+    # Final demands. Sum across all to_sector which will be the 3 final
+    # demand sectors only!
+    f = final_demand.sum(level=['country_iso3','from_sector'])
     
     # Now work out the import ratios
-    D = _calculate_import_ratios(x, i)
+    d = i / (x + i)
     
-    # Now calculate A
-    xhat = diagonalise(1./x)
-    A = (B_dagger + B_star).dot(xhat)
-      
-    country_data = {'x':x, 'i':i, 'e':e, 'B_dagger':B_dagger,
-                    'B_star':B_star,'A':A, 'f':f, 'f_dagger':f_dagger, 'f_star':f_star, 'D':D}    
-    
-    return Country(iso3, country_data)
+    # Get only those flows relevant for input-output. Since we no longer care about
+    # domestic versus imported, we simply sum to get the totals
+    # First: 70x35 (including imports)    
+    Z = flows[sector_flows['from_production_sector'] & sector_flows['to_production_sector']]
+    # Now: 35x35
+    Z = Z.groupby(level=[0,1,2]).sum()
 
-def _create_RoW_country(data, countries, sectors):
+    # Technical coefficients
+    A = _get_technical_coefficients(Z, x)
+    
+    # Get a list of country names
+    countries = sector_flows.index.levels[0].values.tolist()
+    # Create a dictionary of country objects
+    country_objects = {}
+    for country in countries:
+        country_objects[country] = c.Country(country, 
+            f.ix[country], 
+            e.ix[country],
+            i.ix[country],
+            A.ix[country].unstack(1), # Create a matrix from long-format data
+            d.ix[country])
+    return country_objects
+
+def create_RoW_country(stray_exports, stray_imports):
     """ This follows the procedure outlined in the section
     "Calibration of a 'Rest of World' Entity" in the demo
     model paper. In brief, imports to RoW are all those
@@ -102,51 +88,26 @@ def _create_RoW_country(data, countries, sectors):
     Import propensities are then calculated as normal. Final Demand
     is set to be identical to imports. Investments are 0."""
     
-    countries.append('RoW')
-    df_countries = pd.DataFrame({'iso3':countries,'matched':True})
-
-    # Flows from countries in 'countries'
-    from_known = data.merge(df_countries,how='inner',left_on='from_iso3',right_on='iso3')
-    from_known = from_known.drop(['iso3','matched'],1)
-
-    # Flows to countries not in 'countries'
-    stray_exports = from_known.merge(df_countries,how='left',left_on='to_iso3',right_on='iso3')
-    stray_exports = stray_exports[pd.isnull(stray_exports['matched'])]
-
-    # Flows to countries in 'countries'
-    to_known = data.merge(df_countries,how='inner',left_on='to_iso3',right_on='iso3')
-    to_known = to_known.drop(['iso3','matched'],1)
-
-    # Flows from countries not in 'countries'
-    stray_imports = to_known.merge(df_countries,how='left',left_on='from_iso3',right_on='iso3')
-    stray_imports = stray_imports[pd.isnull(stray_imports['matched'])]
-    
     # Create RoW imports and exports
-    RoW_imports = stray_exports.groupby('sector').aggregate(sum)
-    RoW_exports = stray_imports.groupby('sector').aggregate(sum)
-    
-    RoW = Country('RoW',f=RoW_imports,e=RoW_exports,i=RoW_imports)
-    
- 
-def _sector_data_to_matrix(data):
-    """Takes a DataFrame with from and to (sectors or sector
-    groups, and produces a DataFrame from the 
-    value_col_name entries)"""
-    
-    #return np.matrix(data.pivot('from','to','flow_amount'))
-    pivoted = data.pivot('from','to','flow_amount')
-    if np.any(pivoted.shape) == 1:
-        pivoted = pivoted.squeeze()
-    return pivoted
-
-def _is_import(sector_name):
-    s = str(sector_name)
-    return s.startswith(__IMPORT_PREFIX)
-
-def _calculate_import_ratios(domestic_production, total_imports):
-    import_fractions = diagonalise(total_imports / (domestic_production + total_imports))
-    return import_fractions
+    RoW_imports = stray_exports.reset_index().groupby('sector').aggregate(sum)['trade_value']
+    RoW_exports = stray_imports.reset_index().groupby('sector').aggregate(sum)['trade_value']    
+    return c.Country('RoW',f=RoW_imports,e=RoW_exports,i=RoW_imports,
+                     technical_coefficients=0,import_ratios=0)
   
-def _remove_import_prefix(name):
-    return name[len(__IMPORT_PREFIX):]
+
+def rename_multiindex_level(X, old, new):
+    """
+    This is a workaround to this bug in Pandas:
+    https://github.com/pydata/pandas/pull/3175
+    """
+    is_series = isinstance(X, pd.Series)
+    X = pd.DataFrame(X)
+    index_names = X.index.names
+    X = X.reset_index()
+    X = X.rename(columns={old:new})
+    index_names = [name.replace(old,new) for name in index_names]
+    X = X.set_index(index_names)
+    if is_series:
+        X = X.ix[:,0]
+    return X
     

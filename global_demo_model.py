@@ -8,7 +8,8 @@ Created on Mon Jul 01 11:57:49 2013
 import pandas as pd
 import country_setup
 import import_propensities
-import services_trade
+
+reload(country_setup)
 
 __MAX_ITERATIONS__ = 200
 __DEFICIT_TOLERANCE__ = 0.0001
@@ -17,24 +18,25 @@ class GlobalDemoModel(object):
     """ A collection of Country objects connected via a 
     matrix of sectoral trade propensities"""
     
-    def __init__(self, io_data, goods_flows, services_trade_data=None):
-        self.countries = country_setup.create_countries_from_io_data(io_data)
-        self.sectors = self.countries[self.countries.keys()[0]].sectors
-        self.id_list = self._create_country_sector_ids(self.countries, self.sectors)
-        self.trade_flows = {}
-        if not services_trade_data is None:
-            services_flows = services_trade.estimate_services_trade_flows(services_trade_data)
-            data = pd.concat([goods_flows, services_flows], ignore_index=True)
-        else:
-            data = goods_flows
-        self.P = import_propensities.calculate_import_propensities(self.countries, 
-                                                                   data)
+    def __init__(self, sector_flows, commodity_flows, services_flows):
+        self.c = country_setup.create_countries_from_data(sector_flows, commodity_flows)
+        self.countries = pd.unique(sector_flows['country_iso3']).tolist()
+        trade_flows = pd.concat([services_flows,commodity_flows],join='inner')
+        [stray_exports, stray_imports, relevant_flows] = self._relevant_flows(trade_flows,self.countries)
+        self.countries.append('RoW')
+        self.c['RoW'] = country_setup.create_RoW_country(stray_exports,stray_imports)
+        self.sectors = self._get_sector_names(sector_flows)
+        self.id_list = self._create_country_sector_ids(self.c, self.sectors)
+        
+        self.P = import_propensities.calculate_import_propensities(relevant_flows,
+                                                                   self.countries,
+                                                                   self.sectors)
         self._assemble_world_matrices()
                     
     def _world_matrix(self, attribute_name):
         x = {}
         
-        for name, c in self.countries.iteritems():
+        for name, c in self.c.iteritems():
             x[name] = getattr(c, attribute_name)
        
         return pd.concat(x, 1)
@@ -47,7 +49,7 @@ class GlobalDemoModel(object):
         input-output model. This process is repeated at most __MAX_ITERATIONS__ times,
         or until the global trade deficit < __DEFICIT_TOLERANCE__
         """
-        countries = self.countries
+        countries = self.c
         for i in range(__MAX_ITERATIONS__):            
             self._assemble_world_matrices()
             self._iterate_model(countries, self.M, self.P)                
@@ -60,11 +62,16 @@ class GlobalDemoModel(object):
                 return 1
         return 0
 
+    def _get_sector_names(self,flow_data):
+        data = flow_data.copy()
+        data = data[data['from_production_sector']]
+        data = data[~pd.isnull(data['from_sector'])]
+        return pd.unique(data['from_sector']).tolist()
+
+        
     def _assemble_world_matrices(self):
         self.M = self._world_matrix('i')
         self.E = self._world_matrix('e')
-        for sector in self.sectors:
-            self.trade_flows[sector] = self.M.ix[sector] * self.P[sector]
 
     def _iterate_model(self, countries, M, P):
         """ Calculate export requirements. Apply these requirements
@@ -111,6 +118,34 @@ class GlobalDemoModel(object):
             country.recalculate_economy(final_demand=country.f, 
                                         exports=E[country_name])
 
+    def _relevant_flows(self, trade_flows,countries):
+        """
+        THIS NEEDS WRITING.. NEED TO CUT DOWN commodity_flows AND
+        services_flows TO ONLY THOSE FLOWS WE CARE ABOUT.
+        ALL THE HARD WORK IS DONE IN _create_RoW_country
+        """
+        fields = ['from_iso3','to_iso3','sector','trade_value']        
+        data = trade_flows[~pd.isnull(trade_flows.sector)]
+        
+        # FROM HERE ON IN CAN BE IMPROVED WITH pd.Series.isin
+        from_known = _in(data, countries, 'from_iso3')[fields]
+        from_unknown = _in(data, countries, 'from_iso3',notin=True)[fields]
+        
+        known_to_known = _in(from_known, countries, 'to_iso3')
+        known_to_unknown = _in(from_known, countries, 'to_iso3',notin=True)        
+        unknown_to_known = _in(from_unknown, countries, 'to_iso3')
+        
+        # Set all unknown flows to go to RoW
+        known_to_unknown['to_iso3'] = 'RoW'
+        unknown_to_known['from_iso3'] = 'RoW'
+        
+        # Sum the flows which are identical
+        fields.remove('trade_value')
+        known_to_unknown = known_to_unknown.groupby(fields).sum()
+        unknown_to_known = unknown_to_known.groupby(fields).sum()
+        
+        return known_to_unknown, unknown_to_known, pd.concat([known_to_known,known_to_unknown,unknown_to_known])
+        
     def _create_country_sector_ids(self, countries, sectors):
         """ Create a unique id for each country/sector which
         will be used when visualising the model. """
@@ -139,3 +174,17 @@ class GlobalDemoModel(object):
             return self.id_list[lookup_id]
         else:
             return {"country":None, "sector":None}            
+            
+def _in(data, inlist, col_name, notin=False):
+    if notin:
+        how = 'left'
+    else:
+        how = 'inner'
+    matchfld = 'x123abc'
+    match = pd.DataFrame({matchfld:inlist,'matched':True})
+    x = data.merge(match,how=how,left_on=col_name,right_on=matchfld)
+    
+    if notin:
+        return x[pd.isnull(x['matched'])].drop(['matched',matchfld],1)
+    else:
+        return x.drop(['matched',matchfld],1)
