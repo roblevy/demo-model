@@ -60,6 +60,8 @@ class Country(object):
             self.f_star = self.D.dot(self.f)
             self.f_dagger = (self._I - self.D).dot(self.f)
             
+            # I've commented this stuff out, because I'm not sure we really
+            # need B_dagger and B_star
 #            xhat = diagonalise(x)        
 #            self.B = self.A.dot(xhat) # Total flows = A.xhat
 #            self.B_dagger = self.B.dot(self.D) 
@@ -69,6 +71,8 @@ class Country(object):
         self.n = investments
         self.e = exports
         self.f = final_demand
+        
+        return self.e, self.i
                                 
     def _import_reqs(self, domestic_requirements, total_demand):
         """
