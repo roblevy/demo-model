@@ -53,12 +53,12 @@ class Country(object):
         if self.name == 'RoW':
             # See section: Calibration of 'Rest of World' entity in the paper
             self.x = self._RoW_domestic_reqs(exports)
-            self.i = self._RoW_import_reqs(final_demand)
+            i = self._RoW_import_reqs(final_demand)
         else:
             self.x = self._domestic_reqs(total_demand)
-            self.i = self._import_reqs(self.x, total_demand)
-            self.f_star = self.D.dot(self.f)
-            self.f_dagger = (self._I - self.D).dot(self.f)
+            i = self._import_reqs(self.x, total_demand)
+            self.f_star = self.D.dot(final_demand)
+            self.f_dagger = (self._I - self.D).dot(final_demand)
             
             # I've commented this stuff out, because I'm not sure we really
             # need B_dagger and B_star
@@ -68,11 +68,12 @@ class Country(object):
 #            self.B_star = self.B.dot(I - self.D)
 
         # Update Country-level variables:
+        self.i = i
         self.n = investments
         self.e = exports
         self.f = final_demand
         
-        return self.e, self.i
+        return i
                                 
     def _import_reqs(self, domestic_requirements, total_demand):
         """

@@ -28,38 +28,40 @@ sector_flows = sector_flows[sector_flows['country_iso3'].isin(countries)]
 model = global_demo_model.GlobalDemoModel(sector_flows,trade_flows,services_flows)
 
 # Test country object    
-deu = model.c['DEU']
-i = deu.i
-x = deu.x
-f = deu.f
-e = deu.e
-deu.recalculate_economy(f, e) # nothing should happen
+gbr = model.c['GBR']
+i = gbr.i.copy()
+x = gbr.x.copy()
+f = gbr.f.copy()
+e = gbr.e.copy()
+gbr.recalculate_economy(f, e) # nothing should happen
+rtol = 1e-8 # Since numbers are measured in billions, we need a very fine tolerance here!
 print "Test no change when existing f and e are used:"
-print np.allclose(i, deu.i) & np.allclose(x, deu.x)
-f["Agriculture"] = f["Agriculture"] + 1000
-deu.recalculate_economy(f, e)
+print np.allclose(i, gbr.i,rtol=rtol) & np.allclose(x, gbr.x,rtol=rtol)
+f = f.copy()
+f["Agriculture"] = f["Agriculture"] + 100000
+gbr.recalculate_economy(f, e)
 print "Test that when f and e are changed, both x and i change"
-print ~(np.allclose(i,deu.i)) & ~(np.allclose(x,deu.x))
+print ~(np.allclose(i,gbr.i,rtol=rtol)) & ~(np.allclose(x,gbr.x,rtol=rtol))
 print "Test that when f and e are changed, x + i = Ax + f + e"
-print np.allclose(deu.x + deu.i, np.dot(deu.A, deu.x) + deu.f + deu.e)
+print np.allclose(gbr.x + gbr.i, np.dot(gbr.A, gbr.x) + gbr.f + gbr.e,rtol=rtol)
 
 # Run the model
 model.recalculate_world()
 print "Test that imports = exports after recalculating world:"
-print np.allclose(model.E.sum(1), model.M.sum(1))
+print np.allclose(model.E.sum(1), model.M.sum(1),rtol=rtol)
 
 print "Test that increasing one country/sector's final demand increases all sector's output for whole world."
 gbrx = model.c['GBR'].x
-frax = model.c['FRA'].x
-model.c['DEU'].f['Air Transport'] = model.c['DEU'].f['Air Transport'] * 2
+frax = model.c['IND'].x
+model.c['GBR'].f['Air Transport'] = model.c['GBR'].f['Air Transport'] * 2
 model.recalculate_world()
-print np.alltrue(model.c['GBR'].x > gbrx) and np.alltrue(model.c['FRA'].x > frax)
+print np.alltrue(model.c['GBR'].x > gbrx) and np.alltrue(model.c['IND'].x > frax)
 
 print "Test that decreasing one country/sector's final demand decreases all sector's output for whole world."
-deux = model.c['DEU'].x
+gbrx = model.c['GBR'].x
 usax = model.c['USA'].x
 usai = model.c['USA'].i
-model.c['DEU'].f['Agriculture'] = model.c['DEU'].f['Agriculture'] / 2
+model.c['GBR'].f['Agriculture'] = model.c['GBR'].f['Agriculture'] / 2
 model.recalculate_world()
-print np.alltrue(model.c['DEU'].x < deux) and np.alltrue(model.c['USA'].x < usax)
+print np.alltrue(model.c['GBR'].x < gbrx) and np.alltrue(model.c['USA'].x < usax)
 print np.alltrue(model.c['USA'].i < usai)

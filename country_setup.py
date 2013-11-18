@@ -80,17 +80,20 @@ def create_countries_from_data(sector_flows, trade_flows):
             d.ix[country])
     return country_objects
 
-def create_RoW_country(stray_exports, stray_imports):
+def create_RoW_country(stray_exports, stray_imports, sectors):
     """ This follows the procedure outlined in the section
     "Calibration of a 'Rest of World' Entity" in the demo
     model paper. In brief, imports to RoW are all those
     flows not going to a country in countries. Similar with exports.
     Import propensities are then calculated as normal. Final Demand
     is set to be identical to imports. Investments are 0."""
-    
-    # Create RoW imports and exports
-    RoW_imports = stray_exports.reset_index().groupby('sector').aggregate(sum)['trade_value']
-    RoW_exports = stray_imports.reset_index().groupby('sector').aggregate(sum)['trade_value']    
+    # Initialise the pd.Series which will store the i and e values
+    # This is necessary to ensure ALL sectors have an entry    
+    df = pd.DataFrame({'sector':sectors,'trade_value':0}).set_index('sector').squeeze()
+    i = stray_exports.groupby('sector').aggregate(sum)['trade_value']
+    e = stray_imports.groupby('sector').aggregate(sum)['trade_value']
+    RoW_imports = df.add(i,fill_value=0)
+    RoW_exports = df.add(e,fill_value=0)
     return c.Country('RoW',f=RoW_imports,e=RoW_exports,i=RoW_imports,
                      technical_coefficients=0,import_ratios=0)
   
