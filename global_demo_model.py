@@ -94,12 +94,9 @@ class GlobalDemoModel(object):
         """ Create the matrix of export requirements, E. This is
         done based on the import requirements of all sectors in
         all countries."""
-        E = []  
-        for sector, i_j in M.groupby(level=0):
-            i_j = i_j.transpose()
-            P_j = P[sector]
-            E.append (P_j.dot(i_j).transpose())
-        return pd.concat(E, 0)
+        E = P.merge(M,on=['sector','to_iso3'])
+        E['export_total'] = E.p_j * E.import_total
+        return E[['sector','from_iso3','to_iso3','export_total']]
     
     # Not sure this is even being used at the moment!
     # There's code in recalculate_world which does the job    

@@ -10,13 +10,9 @@ chdir(path.dirname(__file__))
 
 import numpy as np
 import pandas as pd
-import dummy_data
-import get_enfold_data
 import global_demo_model
 import output_model
 
-reload(dummy_data)
-reload(get_enfold_data)
 reload(global_demo_model)
 reload(output_model)
 
