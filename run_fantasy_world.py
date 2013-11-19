@@ -16,16 +16,16 @@ reload(output_model)
 
 # Get fantasy data
 
-temp = ''.join([path.dirname(__file__),'/../Fantasy World Data/%s.csv'])
+fname = ''.join([path.dirname(__file__),'/Fantasy World Data/%s.csv'])
 
-io_data = pd.read_csv(temp % 'fantasy_world_data')
-goods_flows = pd.read_csv(temp % 'fantasy_trade_flows')
-services_trade_data = pd.read_csv(temp % 'fantasy_services_trade_totals')
+io_data = pd.read_csv(fname % 'fantasy_world_data',
+                      true_values='t',false_values='f')
+goods_flows = pd.read_csv(fname % 'fantasy_trade_flows',
+                          true_values='t',false_values='f')
                                 
 # Create models
-model_peace = global_demo_model.GlobalDemoModel(io_data, goods_flows)
-model_war = global_demo_model.GlobalDemoModel(io_data, goods_flows)
-
+model_peace = global_demo_model.GlobalDemoModel(io_data, goods_flows, None)
+model_war = global_demo_model.GlobalDemoModel(io_data, goods_flows, None)
 
 # Run model
 model_peace.recalculate_world()
@@ -46,18 +46,18 @@ model_war.recalculate_world()
 models = [model_peace,model_war]
 output_model.jsonify_model(models, 'fantasy')
 
-usa = model_peace.countries['D']
-fra = model_peace.countries['B']
-gbr = model_peace.countries['C']
+d = model_peace.c['D']
+b = model_peace.c['B']
+c = model_peace.c['C']
 
-print "USA f_dagger:"
-print usa.f_dagger
+print "d f_dagger:"
+print d.f_dagger
 
-print "USA f_star:"
-print usa.f_star
+print "d f_star:"
+print d.f_star
 
-print "FRA f_dagger:"
-print fra.f_dagger
+print "b f_dagger:"
+print b.f_dagger
 
-print "FRA f_star:"
-print fra.f_star
+print "b f_star:"
+print b.f_star

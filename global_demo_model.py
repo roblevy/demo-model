@@ -85,7 +85,6 @@ class GlobalDemoModel(object):
         """
         world_imports = M.sum(level='sector')
         world_exports = E.sum(level='sector')
-        e_diff = world_imports - world_exports
         
         return sum(pow(world_imports - world_exports,2))
 
@@ -121,16 +120,21 @@ class GlobalDemoModel(object):
             # Pick the right column for the export matrix E
             # and apply it as an export vector to the current
             # country
+            e = E.ix[:,country_name]
             i = country.recalculate_economy(final_demand=country.f, 
-                                            exports=E.ix[:,country_name])
+                                            exports=e)
             # Now put the new import values back into M, the
             # import vector. This is currently a bit tedious. Is there a better way?
             M = M.swaplevel(0,1) # Now indexed Country, Sector
             M.ix[country_name] = i # Set the relevant country part
             M = M.swaplevel(1,0) # Swapped back
         return M
-                                   
-
+                                
+    def trade_flows(self, sector):
+        M = self.M.ix[sector]
+        P = self.P[sector]
+        return P * M
+        
     def _relevant_flows(self, trade_flows,countries):
         """
         Keep only flows to and from countries in 'countries'.

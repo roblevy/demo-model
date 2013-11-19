@@ -60,12 +60,11 @@ class Country(object):
             self.f_star = self.D.dot(final_demand)
             self.f_dagger = (self._I - self.D).dot(final_demand)
             
-            # I've commented this stuff out, because I'm not sure we really
-            # need B_dagger and B_star
-#            xhat = diagonalise(x)        
-#            self.B = self.A.dot(xhat) # Total flows = A.xhat
-#            self.B_dagger = self.B.dot(self.D) 
-#            self.B_star = self.B.dot(I - self.D)
+            # B_dagger and B_star are useful for visualising the model
+            xhat = diagonalise(self.x)        
+            self.B = self.A.dot(xhat) # Total flows = A.xhat
+            self.B_dagger = self.B.dot(self.D) 
+            self.B_star = self.B.dot(self._I - self.D)
 
         # Update Country-level variables:
         self.i = i

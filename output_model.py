@@ -10,16 +10,18 @@ from math import sin, cos, pi
 
 __FD_COLOUR__ = 'darkgrey'
 
-def jsonify_model(models, filename):
+def jsonify_model(models, filename, sectors=[]):
     offset = [800,800]
     r1 = 200
     r2 = 100
     alpha = 1.2
     data = {'models':[]}
     for model_number, model in enumerate(models):
+        if len(sectors) == 0:
+            sectors = model.sectors
         model_data = {'nodes':[], 'links':[]}
         country_ids = _set_arbitrary_country_ids(model)
-        countries = [c for k, c in sorted(model.countries.items()) if k != 'RoW']
+        countries = [c for k, c in sorted(model.c.items()) if k != 'RoW']
         io_cutoff = 0.0
         trade_cutoff = 0.0
         import_cutoff = 0.0
@@ -41,7 +43,7 @@ def jsonify_model(models, filename):
             node['parent'] = country_ids[c.name]
             node['label'] = '%s FD' % c.name
             model_data['nodes'].append(node)
-            for sector_id, s in enumerate(model.sectors):
+            for sector_id, s in enumerate([sector for sector in model.sectors if sector in sectors]):
                 # Sector nodes            
                 node = {}
                 node['size'] = c.x[s] # Total output of sector s in country c
@@ -68,7 +70,7 @@ def jsonify_model(models, filename):
                     link['group'] = sector_id
                     link['value'] = link_value
                     model_data['links'].append(link)
-                for sector_id2, s2 in enumerate(model.sectors):
+                for sector_id2, s2 in enumerate([sector for sector in model.sectors if sector in sectors]):
                     if s != s2:           
                         # Internal flows (input-output)
                         link_value = c.B_dagger[s2][s]
@@ -89,12 +91,12 @@ def jsonify_model(models, filename):
                             link['value'] = link_value
                             model_data['links'].append(link)
                         
-        for sector_id, s in enumerate(model.sectors):
+        for sector_id, s in enumerate([sector for sector in model.sectors if sector in sectors]):
             for c1 in countries:
                 for c2 in countries:
                     if c1.name != c2.name:
                         # External flows (trade)
-                        link_value = model.trade_flows[s][c2.name][c1.name]
+                        link_value = model.trade_flows(s)[c2.name][c1.name]
                         if link_value > trade_cutoff:                
                             link = {}
                             link['source'] = _country_id(country_ids, c1.name)
@@ -113,7 +115,7 @@ def jsonify_model(models, filename):
 def _set_arbitrary_country_ids(model):
     node_id = max(model.id_list.keys()) + 1
     country_ids = {}    
-    for c in model.countries.iterkeys():
+    for c in model.c.iterkeys():
         country_ids[c] = node_id
         node_id += 1
     return country_ids
