@@ -9,22 +9,59 @@ from gdm_library import diagonalise
 
 class Country(object):
     """
-    A country is simply a collection of the following vectors and matrices:
-      1. f: a vector of final demands
-      2. e: a vector of export demands
-      3. i: a vector of import requirements
-      4. A: a matrix of technical coefficients describing the 'recipe' of sector inputs
-            required to make one unit of sector output
-      5. d: a vector of import ratios, defining what proportion of the total demand
-            for a given sector output is supplied by imports vs. produced domestically
+    
+    A country is simply a collection of the vectors and matrices specific to
+    a country in the global demo model.
+    
     """
-    def __init__(self, name, f, e, i,
+    def __init__(self, name, final_demand, export_demand, import_demand,
                  technical_coefficients, 
                  import_ratios):
+        """
+        
+        Parameters
+        ----------
+        name : string
+            A human-readable name for the country. Usually its ISO 3 code.
+        final_demand : pandas.Series
+            A vector of final demands, indexed on sector
+        export_demand : pandas.Series
+            A vector of export demands, indexed on sector
+        import_demand : pandas.Series
+            A vector of import requirements, indexed on sector
+        technical_coefficients : pandas.DataFrame
+            A matrix of technical coefficients describing the 'recipe' of sector inputs
+            required to make one unit of sector output. The index (rows) is the 
+            'from sector' and the columns are the 'to sector'
+        import_ratios : pandas.Series
+            A vector of import ratios, defining what proportion of the total demand
+            for a given sector output is supplied by imports vs. produced
+            domestically. Indexed on sector
+
+        Attributes
+        ----------
+        f : pandas.Series
+            A vector of final demands, indexed on sector
+        e : pandas.Series
+            A vector of export demands, indexed on sector
+        i : pandas.Series
+            A vector of import requirements, indexed on sector
+        d : pandas.Series
+            A vector of import ratios, defining what proportion of the total demand
+            for a given sector output is supplied by imports vs. produced
+            domestically. Indexed on sector.
+        A : pandas.DataFrame
+            A matrix of technical coefficients describing the 'recipe' of sector inputs
+            required to make one unit of sector output. The index (rows) is the 
+            'from sector' and the columns are the 'to sector'
+        D : pandas.DataFrame
+            A diagonal matrix, whose diagonal elements are the elements of d.
+            Both the index (rows) and the columns are sector.
+        """
         self.name = name
-        self.f = f
-        self.e = e
-        self.i = i
+        self.f = final_demand
+        self.e = export_demand
+        self.i = import_demand
         if name != 'RoW':
             self.A = technical_coefficients
             self.d = import_ratios
@@ -42,8 +79,31 @@ class Country(object):
         
     def recalculate_economy(self, final_demand, exports, investments=None):
         """
-        Run the algorithm outlined in the section 'Model Algorithm' of the
-        paper.        
+        Calculate a new import vector from a set of demands.
+        
+        Set the country's final demand, export and investment vectors, and
+        run the algorithm outlined in the section 'Model Algorithm' of the
+        paper. This calculates import requirements based on demand,
+        technical coefficients and import ratios.
+        Additionally, recalculate :math:`f^*`, :math:`f^{dagger}`, :math:`B^*` and
+        :math:`B^{dagger}`.
+        
+        Parameters
+        ----------
+        final_demand : pandas.Series
+            A vector of final demands, indexed on sector
+        exports : pandas.Series
+            A vector of export demands, indexed on sector
+        investments : pandas.Series, optional
+            A vector of investment demands, indexed on sector. Defaults to
+            zero.
+            
+        Returns
+        -------
+        pandas.Series
+            A vector of import demands, indexed on sector. Note that this
+            function also sets the module-level variable `i`, so the return
+            value is only returned for convenience and can safely be discarded.
         """
         
         if investments is None:
@@ -76,8 +136,8 @@ class Country(object):
                                 
     def _import_reqs(self, domestic_requirements, total_demand):
         """
-        Calculates i = (I - D)^-1 D.x 
-        where d is the matrix of import ratios.
+        Calculates :math:`i = (I - D)^-1 Dx`
+        where D is the diagonal matrix of import ratios.
         The inverse in the first part of the right-hand-side has no
         solution where D contains elements = 1. If these are replaced
         by 0.0 within the inverse only, the import for that product will

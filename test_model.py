@@ -23,7 +23,7 @@ trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',t
 services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
                                  
 # Create model
-#countries = ['USA','GBR','IND']
+countries = ['USA','GBR','IND']
 countries = pd.unique(sector_flows.country_iso3).tolist()
 sector_flows = sector_flows[sector_flows['country_iso3'].isin(countries)]
 model = global_demo_model.GlobalDemoModel(sector_flows,trade_flows,services_flows)

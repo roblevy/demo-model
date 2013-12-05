@@ -9,8 +9,10 @@ import services_trade
 import pandas as pd
 reload(services_trade)
 
-data = pd.read_csv('../Data/200 Countries/2010/vw_services_totals.csv')
+year = input("Which year? ")
+
+data = pd.read_csv('../Data/200 Countries/%s/vw_services_totals_%s.csv' % (year,year))
 
 services_flows = services_trade.estimate_services_trade_flows(data)
 
-services_flows.to_csv('../Data/200 Countries/2010/balanced_services_2010.csv',index=False)
+services_flows.to_csv('../Data/200 Countries/%s/balanced_services_%s.csv' % (year,year),index=False)
