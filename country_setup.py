@@ -73,11 +73,12 @@ def create_countries_from_data(sector_flows, trade_flows):
     country_objects = {}
     for country in countries:
         country_objects[country] = c.Country(country, 
-            f.ix[country], 
-            e.ix[country],
-            i.ix[country],
-            A.ix[country].unstack(1), # Create a matrix from long-format data
-            d.ix[country])
+            final_demand = f.ix[country], 
+            export_demand = e.ix[country],
+            import_demand = i.ix[country],
+            # Create a matrix from long-format data
+            technical_coefficients = A.ix[country].unstack(1), 
+            import_ratios = d.ix[country])
     return country_objects
 
 def create_RoW_country(stray_exports, stray_imports, sectors):
@@ -94,8 +95,11 @@ def create_RoW_country(stray_exports, stray_imports, sectors):
     e = stray_imports.groupby('sector').aggregate(sum)['trade_value']
     RoW_imports = df.add(i,fill_value=0)
     RoW_exports = df.add(e,fill_value=0)
-    return c.Country('RoW',f=RoW_imports,e=RoW_exports,i=RoW_imports,
-                     technical_coefficients=0,import_ratios=0)
+    return c.Country('RoW',final_demand=RoW_imports,
+                     export_demand=RoW_exports,
+                     import_demand=RoW_imports,
+                     technical_coefficients=0,
+                     import_ratios=0)
   
 
 def rename_multiindex_level(X, old, new):
