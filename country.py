@@ -199,13 +199,19 @@ class Country(object):
         Solves x = [I - (I - D)A]^-1.(I - D)F
         The inverse on the right-hand-side has no solution if D has any zero
         elements.
+        
+        Notes
+        -----
+        Note that the diagonalisation of the import ratios, D, is no longer
+        used, since multiplying rows of a matrix by elements of a vector
+        is easy in pandas.
         """
         I = self._I
         A = self.A
         F = total_demand
-        D = self.D
-        x = np.linalg.solve(I - (I - D).dot(A), (I - D).dot(F))
-        
+        d = self.d
+        x = np.linalg.solve(I - A.mul(1 - d, 'index'),F.mul(1 - d, 'index'))
+    
         return x
                 
     def _RoW_import_reqs(self,fd):
