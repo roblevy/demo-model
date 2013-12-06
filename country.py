@@ -166,6 +166,9 @@ class Country(object):
                  
     def _import_reqs(self, domestic_requirements, total_demand):
         """
+        Given domestic requirements, total demand and the import ratios, 
+        calculate import demand.
+        
         Calculates :math:`i = (I - D)^-1 Dx`
         where D is the diagonal matrix of import ratios.
         The inverse in the first part of the right-hand-side has no
@@ -174,13 +177,19 @@ class Country(object):
         simply be zero. They can then be retrospectively set to the equivalent
         total demand. This is safe because if import demand is genuinely zero,
         then total demand must also be zero.
+        
+        Notes
+        -----
+        The matrix algebra calculation has been replaced with a simple
+        pandas element-wise binary operation.
         """
-        I = self._I       
-        D = self.D
-        Ddash = D.replace(1,0.0)
+        if 1 in self.d.values:
+            ddash = self.d.replace(1,0.0)
+        else:
+            ddash = self.d
         x = domestic_requirements
-        i = np.linalg.solve(I - Ddash, Ddash.dot(x))
-        i[i==0] = total_demand # set to total_demand where 0
+        i = ddash.mul(x).div(1 - ddash)
+        i[i == 0] = total_demand # set to total_demand where 0
         return i
 
     def _domestic_reqs(self,total_demand):
