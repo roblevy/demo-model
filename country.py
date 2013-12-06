@@ -118,12 +118,6 @@ class Country(object):
             self.x = self._domestic_reqs(total_demand)
             i = self._import_reqs(self.x, total_demand)
             
-            # B_dagger and B_star are useful for visualising the model
-            xhat = diagonalise(self.x)        
-            self.B = self.A.dot(xhat) # Total flows = A.xhat
-            self.B_dagger = self.B.dot(self.D) 
-            self.B_star = self.B.dot(self._I - self.D)
-
         # Update Country-level variables:
         self.i = i
         self.n = investments
@@ -131,11 +125,43 @@ class Country(object):
         self.f = final_demand
         
         return i
+    
+    def B(self):
+        """
+        Sector-to-sector flows. 
+        
+        These flows are not used in the model, but are useful
+        for analysis and visualisation.
+        """
+        xhat = diagonalise(self.x)        
+        return self.A.dot(xhat) # Total flows = A.xhat
+        
+    def B_dagger(self):
+        """
+        Sector-to-sector flows (domestic only)
+        """
+        return self.B.dot(self.D) 
 
+    def B_star(self):
+        """
+        Sector-to-sector flows (imports only)
+        """
+        return self.B.dot(self._I - self.D)
+        
     def f_dagger(self):
+        """
+        Final demand vector (domestic only)
+        
+        Calculated from the total final demand and the import ratios, D.
+        """
         return (self._I - self.D).dot(self.f)
 
     def f_star(self):
+        """
+        Final demand vector (imports only)
+
+        Calculated from the total final demand and the import ratios, D.
+        """
         return self.D.dot(self.f)
                  
     def _import_reqs(self, domestic_requirements, total_demand):
