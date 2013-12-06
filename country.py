@@ -117,8 +117,6 @@ class Country(object):
         else:
             self.x = self._domestic_reqs(total_demand)
             i = self._import_reqs(self.x, total_demand)
-            self.f_star = self.D.dot(final_demand)
-            self.f_dagger = (self._I - self.D).dot(final_demand)
             
             # B_dagger and B_star are useful for visualising the model
             xhat = diagonalise(self.x)        
@@ -133,7 +131,13 @@ class Country(object):
         self.f = final_demand
         
         return i
-                                
+
+    def f_dagger(self):
+        return (self._I - self.D).dot(self.f)
+
+    def f_star(self):
+        return self.D.dot(self.f)
+                 
     def _import_reqs(self, domestic_requirements, total_demand):
         """
         Calculates :math:`i = (I - D)^-1 Dx`
