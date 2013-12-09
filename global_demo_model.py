@@ -114,6 +114,19 @@ class GlobalDemoModel(object):
         M = self.M.ix[sector]
         P = self.P[sector]
         return P * M
+    
+    def set_final_demand(self, country_name, sector, value):
+        country = self.c[country_name]        
+        f = country.f.copy()
+        f[sector] = value
+        # Get new import demand for country        
+        new_i = country.recalculate_economy(final_demand=f)
+        # Put new import demand into self.M
+        M = self.M.swaplevel(0,1,copy=False).sortlevel()
+        M.ix[country_name] = new_i
+        self.M = M.swaplevel(0,1).sortlevel()
+        # Recalculate world
+        self.recalculate_world()
         
     def get_id(self, country, sector):
         the_id = [ k for k, v in self.id_list.iteritems() 

@@ -81,7 +81,10 @@ class Country(object):
     def __str__(self):
         return ' '.join(["Country:", self.name])
         
-    def recalculate_economy(self, final_demand, exports, investments=None):
+    def recalculate_economy(self, 
+                            final_demand = None, 
+                            exports = None, 
+                            investments = None):
         """
         Calculate a new import vector from a set of demands.
         
@@ -94,9 +97,9 @@ class Country(object):
         
         Parameters
         ----------
-        final_demand : pandas.Series
+        final_demand : pandas.Series optional
             A vector of final demands, indexed on sector
-        exports : pandas.Series
+        exports : pandas.Series optional
             A vector of export demands, indexed on sector
         investments : pandas.Series, optional
             A vector of investment demands, indexed on sector. Defaults to
@@ -113,9 +116,12 @@ class Country(object):
         e = exports
         n = investments
         
+        if f is None:
+            f = self.f
+        if e is None:
+            e = self.e
         if n is None:
-            n = (e * 0)
-            n.name = "Investments"
+            n = self.n
             
         if (_change_is_significant(f, self.f) or 
             _change_is_significant(e, self.e) or
