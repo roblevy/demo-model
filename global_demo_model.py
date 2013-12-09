@@ -177,6 +177,43 @@ class GlobalDemoModel(object):
         # Recalculate world
         self.recalculate_world()
     
+    def technical_coefficients(self):
+        A = {}
+        for name, c in self.countries.iteritems():
+            if name != 'RoW':
+                A[name] = c.A
+        return pd.Panel.from_dict(A)
+
+    def import_ratios(self, as_matrix=False):
+        """
+        get import ratios from each country in the model
+        
+        If as_matrix = False, returns a pd.DataFrame of import ratios, 
+        with countries as columns, and sectors as the index (rows)
+        Otherwise returns a pd.Panel, keyed on country name, where each
+        element is a DataFrame with a diagonalised imjport propensity matrix.
+        
+        Parameters
+        ----------
+        as_matrix : boolean
+            Return diagonalised D matrices, or simple d vectors?
+            
+        Returns
+        -------
+        pd.Generic
+        """
+        D = {}
+        for name, c in self.countries.iteritems():
+            if name != 'RoW':
+                if as_matrix:
+                    D[name] = c.d
+                else:
+                    D[name] = c.D
+        if as_matrix:
+            return pd.Panel.from_dict(D)
+        else:
+            return pd.DataFrame.from_dict(D)
+    
     def to_file(self, filename):
         """
         Create a pickle of the currentdemo model

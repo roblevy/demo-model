@@ -40,7 +40,7 @@ def calculate_import_propensities(trade_data, import_totals, countries, sectors)
         col_sums = P_i.sum(0)
         P_i.ix['RoW'][col_sums < 1] = P_i.ix['RoW'][col_sums < 1] + (1 - col_sums)
         P[sector] = P_i    
-    return P
+    return pd.Panel.from_dict(P)
 
         
 def _data_contains_sector(data, sector):
