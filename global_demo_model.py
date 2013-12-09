@@ -67,7 +67,7 @@ class GlobalDemoModel(object):
         self.country_names = countries.keys()
         self.imports = imports
         self.exports = exports
-        self.import_propensities = import_propensities
+        self._import_propensities = import_propensities
 
         self.id_list = _create_country_sector_ids(self.country_names, sectors)
 
@@ -140,7 +140,7 @@ class GlobalDemoModel(object):
         countries = self.countries
         M = self.imports
         E = self.exports
-        P = self.import_propensities
+        P = self._import_propensities
         for i in range(__MAX_ITERATIONS__):
             [M, E] = _iterate_model(M, E, P, countries)                
             deficit = _export_deficit(M, E)
@@ -161,7 +161,7 @@ class GlobalDemoModel(object):
         for the given sector.
         """
         M = self.imports.ix[sector]
-        P = self.import_propensities[sector]
+        P = self._import_propensities[sector]
         return P * M
     
     def set_final_demand(self, country_name, sector, value):
@@ -177,6 +177,9 @@ class GlobalDemoModel(object):
         # Recalculate world
         self.recalculate_world()
     
+    def import_propensities(self):
+        return self._import_propensities
+        
     def technical_coefficients(self):
         A = {}
         for name, c in self.countries.iteritems():
@@ -206,9 +209,9 @@ class GlobalDemoModel(object):
         for name, c in self.countries.iteritems():
             if name != 'RoW':
                 if as_matrix:
-                    D[name] = c.d
-                else:
                     D[name] = c.D
+                else:
+                    D[name] = c.d
         if as_matrix:
             return pd.Panel.from_dict(D)
         else:
@@ -222,9 +225,9 @@ class GlobalDemoModel(object):
                  'sectors': self.sectors,
                  'imports': self.imports,
                  'exports': self.exports,
-                 'import_propensities': self.import_propensities}
+                 'import_propensities': self._import_propensities}
         cPickle.dump(model, 
-                     open(filename,'w'))
+                     open(filename,'wb'))
 #                     protocol=cPickle.HIGHEST_PROTOCOL)
     
     def get_id(self, country, sector):
