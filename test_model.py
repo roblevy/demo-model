@@ -55,10 +55,10 @@ print np.allclose(model.E.sum(1), model.M.sum(1),rtol=rtol)
 
 print "Test that increasing one country/sector's final demand increases all sector's output for whole world."
 gbrx = model.c['GBR'].x
-frax = model.c['IND'].x
+indx = model.c['IND'].x
 model.c['GBR'].f['Air Transport'] = model.c['GBR'].f['Air Transport'] * 2
 model.recalculate_world()
-print np.alltrue(model.c['GBR'].x > gbrx) and np.alltrue(model.c['IND'].x > frax)
+print np.alltrue(model.c['GBR'].x > gbrx) and np.alltrue(model.c['IND'].x > indx)
 
 print "Test that decreasing one country/sector's final demand decreases all sector's output for whole world."
 gbrx = model.c['GBR'].x

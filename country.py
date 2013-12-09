@@ -7,6 +7,8 @@ Created on Wed Jun 19 15:26:10 2013
 import numpy as np
 from gdm_library import diagonalise
 
+__eps__ = 1
+
 class Country(object):
     """
     
@@ -62,6 +64,8 @@ class Country(object):
         self.f = final_demand
         self.e = export_demand
         self.i = import_demand
+        self.n = export_demand * 0
+        
         if name != 'RoW':
             self.A = technical_coefficients
             self.d = import_ratios
@@ -85,8 +89,8 @@ class Country(object):
         run the algorithm outlined in the section 'Model Algorithm' of the
         paper. This calculates import requirements based on demand,
         technical coefficients and import ratios.
-        Additionally, recalculate :math:`f^*`, :math:`f^{dagger}`, :math:`B^*` and
-        :math:`B^{dagger}`.
+        If the changes in input vectors are negligable (< __eps__), 
+        nothing is recalculated.
         
         Parameters
         ----------
@@ -105,27 +109,38 @@ class Country(object):
             function also sets the module-level variable `i`, so the return
             value is only returned for convenience and can safely be discarded.
         """
+        f = final_demand
+        e = exports
+        n = investments
         
-        if investments is None:
-            investments = (exports * 0)
-            investments.name = "Investments"
-        total_demand = final_demand + exports + investments
-        if self.name == 'RoW':
-            # See section: Calibration of 'Rest of World' entity in the paper
-            self.x = self._RoW_domestic_reqs(exports)
-            i = self._RoW_import_reqs(final_demand)
-        else:
-            self.x = self._domestic_reqs(total_demand)
-            i = self._import_reqs(self.x, total_demand)
+        if n is None:
+            n = (e * 0)
+            n.name = "Investments"
             
-        # Update Country-level variables:
-        self.i = i
-        self.n = investments
-        self.e = exports
-        self.f = final_demand
+        if (_change_is_significant(f, self.f) or 
+            _change_is_significant(e, self.e) or
+            _change_is_significant(n, self.n)):
+            if self.name == 'RoW':
+                # See section: Calibration of 'Rest of World' entity in the paper
+                self.x = self._RoW_domestic_reqs(e)
+                i = self._RoW_import_reqs(f)
+            else:
+                total_demand = f + e + n
+                self.x = self._domestic_reqs(total_demand)
+                i = self._import_reqs(self.x, total_demand)
+            
+            # Update Country-level variables:
+            self.i = i
+            self.n = n
+            self.e = e
+            self.f = f
+        else:
+            # The change in input vectors is not deemed big enough
+            # to be worth recalculating anything
+            i = self.i
         
         return i
-    
+        
     def B(self):
         """
         Sector-to-sector flows. 
@@ -221,4 +236,14 @@ class Country(object):
         return e        
             
   
+def _change_is_significant(old, new):
+    """
+    Test two comparable pandas.Series objects to see if 
+    anything has changed 'much'
+    
+    True if any of the absolute differences in the values
+    of the Series is greater than __eps__, a module-level
+    variable.
+    """
+    return any(np.greater(np.abs(old - new), __eps__))
 
