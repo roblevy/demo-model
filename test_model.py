@@ -23,15 +23,16 @@ trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',t
 services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
                                  
 # Create model
-countries = ['USA','GBR','IND']
-countries = pd.unique(sector_flows.country_iso3).tolist()
-sector_flows = sector_flows[sector_flows['country_iso3'].isin(countries)]
-model = global_demo_model.GlobalDemoModel(sector_flows,trade_flows,services_flows)
+#countries = ['USA','GBR','IND']
+#countries = pd.unique(sector_flows.country_iso3).tolist()
+#sector_flows = sector_flows[sector_flows['country_iso3'].isin(countries)]
+model = global_demo_model.GlobalDemoModel.from_data(sector_flows,
+                                                    trade_flows,
+                                                    services_flows)
 
-model.trade_flows('Agriculture')
-
+#%%
 # Test country object    
-gbr = model.c['GBR']
+gbr = model.countries['GBR']
 i = gbr.i.copy()
 x = gbr.x.copy()
 f = gbr.f.copy()
@@ -51,20 +52,20 @@ print np.allclose(gbr.x + gbr.i, np.dot(gbr.A, gbr.x) + gbr.f + gbr.e,rtol=rtol)
 # Run the model
 model.recalculate_world()
 print "Test that imports = exports after recalculating world:"
-print np.allclose(model.E.sum(1), model.M.sum(1),rtol=rtol)
+print np.allclose(model.exports.sum(1), model.imports.sum(1),rtol=rtol)
 
 print "Test that increasing one country/sector's final demand increases all sector's output for whole world."
-gbrx = model.c['GBR'].x
-indx = model.c['IND'].x
+gbrx = model.countries['GBR'].x
+indx = model.countries['IND'].x
 model.set_final_demand('GBR','Air Transport', 
-                       model.c['GBR'].f['Air Transport'] * 2)
-print np.alltrue(model.c['GBR'].x > gbrx) and np.alltrue(model.c['IND'].x > indx)
+                       model.countries['GBR'].f['Air Transport'] * 2)
+print np.alltrue(model.countries['GBR'].x > gbrx) and np.alltrue(model.countries['IND'].x > indx)
 
 print "Test that decreasing one country/sector's final demand decreases all sector's output for whole world."
-gbrx = model.c['GBR'].x
-usax = model.c['USA'].x
-usai = model.c['USA'].i
+gbrx = model.countries['GBR'].x
+usax = model.countries['USA'].x
+usai = model.countries['USA'].i
 model.set_final_demand('GBR','Agriculture',
-                       model.c['GBR'].f['Agriculture'] / 2)
-print np.alltrue(model.c['GBR'].x < gbrx) and np.alltrue(model.c['USA'].x < usax)
-print np.alltrue(model.c['USA'].i < usai)
+                       model.countries['GBR'].f['Agriculture'] / 2)
+print np.alltrue(model.countries['GBR'].x < gbrx) and np.alltrue(model.countries['USA'].x < usax)
+print np.alltrue(model.countries['USA'].i < usai)

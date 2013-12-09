@@ -21,7 +21,7 @@ def jsonify_model(models, filename, sectors=[]):
             sectors = model.sectors
         model_data = {'nodes':[], 'links':[]}
         country_ids = _set_arbitrary_country_ids(model)
-        countries = [c for k, c in sorted(model.c.items()) if k != 'RoW']
+        countries = [c for k, c in sorted(model.countries.items()) if k != 'RoW']
         io_cutoff = 0.0
         trade_cutoff = 0.0
         import_cutoff = 0.0
@@ -115,7 +115,7 @@ def jsonify_model(models, filename, sectors=[]):
 def _set_arbitrary_country_ids(model):
     node_id = max(model.id_list.keys()) + 1
     country_ids = {}    
-    for c in model.c.iterkeys():
+    for c in model.countries.iterkeys():
         country_ids[c] = node_id
         node_id += 1
     return country_ids
