@@ -216,6 +216,21 @@ class GlobalDemoModel(object):
             return pd.Panel.from_dict(D)
         else:
             return pd.DataFrame.from_dict(D)
+
+    def gross_output(self):
+        """
+        The gross output of each country in the model
+        
+        Returns
+        -------
+        pandas.Series
+            A pandas.Series of gross_outputs, indexed on country.
+        """
+        g_out = pd.Series(0, index=self.country_names)
+        g_out.name = 'gross_output'
+        for name, c in self.countries.iteritems():
+            g_out.ix[name] = c.gross_output()
+        return g_out
     
     def to_file(self, filename):
         """
@@ -243,7 +258,7 @@ class GlobalDemoModel(object):
     def get_country_sector(self, lookup_id):
         """
         
-        Do some magic
+        Not documented yet.
         
         """
         if lookup_id in self.id_list:

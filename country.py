@@ -146,6 +146,16 @@ class Country(object):
             i = self.i
         
         return i
+    
+    def gross_output(self):
+        """
+        The total value of output from every sector combined
+        
+        returns
+        -------
+        pandas.Series
+        """
+        return self.x.sum()
         
     def B(self):
         """
