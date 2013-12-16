@@ -164,12 +164,24 @@ class GlobalDemoModel(object):
         P = self._import_propensities[sector]
         return P * M
     
-    def set_final_demand(self, country_name, sector, value):
+    def set_final_demand(self, country_name, sector, value, recalculate=True):
         """
         Set the `sector` element of the $f$ vector in `country_name`
         to `value`.
         
-        This method also updates `self.imports` and recalculates the world.
+        This method also updates `self.imports`. It will additionally
+        recalculates the world if `recalculate` is True.
+        
+        Parameters
+        ----------
+        country_name : str
+            The name of the country
+        sector : str
+            The name of the sector
+        value : float
+            The new value of the final demand
+        recalculate : bool optional
+            Recalculate the model?
         """
         country = self.countries[country_name]        
         f = country.f.copy()
@@ -180,8 +192,8 @@ class GlobalDemoModel(object):
         M = self.imports.swaplevel(0,1,copy=False).sortlevel()
         M.ix[country_name] = new_i
         self.imports = M.swaplevel(0,1).sortlevel()
-        # Recalculate world
-        self.recalculate_world()
+        if recalculate:
+            self.recalculate_world()
     
     def import_propensities(self):
         return self._import_propensities
@@ -232,7 +244,7 @@ class GlobalDemoModel(object):
         pandas.Series
             A pandas.Series of gross_outputs, indexed on country.
         """
-        country_names = self.country_names
+        country_names = list(self.country_names)
         if not with_RoW:
             country_names.remove('RoW')
         g_out = pd.Series(0, index=country_names)
