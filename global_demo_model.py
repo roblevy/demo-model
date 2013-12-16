@@ -165,6 +165,12 @@ class GlobalDemoModel(object):
         return P * M
     
     def set_final_demand(self, country_name, sector, value):
+        """
+        Set the `sector` element of the $f$ vector in `country_name`
+        to `value`.
+        
+        This method also updates `self.imports` and recalculates the world.
+        """
         country = self.countries[country_name]        
         f = country.f.copy()
         f[sector] = value
@@ -217,7 +223,7 @@ class GlobalDemoModel(object):
         else:
             return pd.DataFrame.from_dict(D)
 
-    def gross_output(self):
+    def gross_output(self, with_RoW = False):
         """
         The gross output of each country in the model
         
@@ -226,11 +232,15 @@ class GlobalDemoModel(object):
         pandas.Series
             A pandas.Series of gross_outputs, indexed on country.
         """
-        g_out = pd.Series(0, index=self.country_names)
+        country_names = self.country_names
+        if not with_RoW:
+            country_names.remove('RoW')
+        g_out = pd.Series(0, index=country_names)
         g_out.name = 'gross_output'
-        for name, c in self.countries.iteritems():
-            g_out.ix[name] = c.gross_output()
-        return g_out
+        for c_name in country_names:
+            c = self.countries[c_name]
+            g_out.ix[c_name] = c.gross_output()
+        return g_out.sort_index()
     
     def to_file(self, filename):
         """
