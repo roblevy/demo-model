@@ -208,9 +208,9 @@ class GlobalDemoModel(object):
         df = pd.DataFrame()
         for name, country in self.countries.iteritems():
             fd = country.f.reset_index(name='final_demand')
-            fd['country_name'] = name
+            fd['country_iso3'] = name
             df = pd.concat([df, fd], 0)
-        df = df.set_index(['country_name','from_sector']).squeeze()
+        df = df.set_index(['country_iso3','sector']).squeeze()
         df.name = 'final_demand'
         return df
         
