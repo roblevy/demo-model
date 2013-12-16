@@ -195,6 +195,25 @@ class GlobalDemoModel(object):
         if recalculate:
             self.recalculate_world()
     
+    def final_demand(self):
+        """
+        A `pandas.Series` of final demands
+        
+        The Series is indexed on country_name/sector
+        
+        Returns:
+        --------
+         : pandas.Series
+        """        
+        df = pd.DataFrame()
+        for name, country in self.countries.iteritems():
+            fd = country.f.reset_index(name='final_demand')
+            fd['country_name'] = name
+            df = pd.concat([df, fd], 0)
+        df = df.set_index(['country_name','from_sector']).squeeze()
+        df.name = 'final_demand'
+        return df
+        
     def import_propensities(self):
         return self._import_propensities
         
