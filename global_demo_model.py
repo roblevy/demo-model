@@ -121,7 +121,9 @@ class GlobalDemoModel(object):
         (M, E, P) = _initialise(relevant_flows, countries, sectors)
         return cls(countries, sectors, M, E, P, calculate=True)
 
-    def recalculate_world(self, tolerance=__DEFICIT_TOLERANCE__):
+    def recalculate_world(self, 
+                          tolerance=__DEFICIT_TOLERANCE__,
+                          calculate_deltas=False):
         """ 
         Iterate between setting import demands and export demands until
         trade in all sectors balances.
@@ -156,7 +158,8 @@ class GlobalDemoModel(object):
                 self.exports = E
                 print "World recalculated after %i iterations." % i                
                 return True
-        print "Warning: World didn't converge after %i iterations." % __MAX_ITERATIONS__
+        print "Warning: World didn't converge " \
+              "after %i iterations." % __MAX_ITERATIONS__
         return False
             
     def trade_flows(self, sector):
@@ -171,7 +174,10 @@ class GlobalDemoModel(object):
         P = self._import_propensities[sector]
         return P * M
     
-    def set_final_demand(self, country_name, sector, value, recalculate=True):
+    def set_final_demand(self, country_name, sector, value, 
+                         recalculate=True, 
+                         tolerance=__DEFICIT_TOLERANCE__,
+                         calculate_deltas=False):
         """
         Set the `sector` element of the $f$ vector in `country_name`
         to `value`.
@@ -194,11 +200,11 @@ class GlobalDemoModel(object):
         f = country.f.copy()
         f[sector] = value
         # Get new import demand for country        
-        new_i = country.recalculate_economy(final_demand=f)
-        # Put new import demand into self.M
-        M = self.imports.swaplevel(0,1,copy=False).sortlevel()
-        M.ix[country_name] = new_i
-        self.imports = M.swaplevel(0,1).sortlevel()
+        new_m = country.recalculate_economy(final_demand=f, 
+                                            tolerance=tolerance,
+                                            calculate_deltas=calculate_deltas)
+        # Put new import demand into self.imports
+        self.imports = _update_M(self.imports, new_m, country_name)
         if recalculate:
             self.recalculate_world()
     
@@ -312,7 +318,7 @@ class GlobalDemoModel(object):
         if lookup_id in self.id_list:
             return self.id_list[lookup_id]
         else:
-            return {"country":None, "sector":None}            
+            return {"country":None, "sector":None}   
             
 def _initialise(data, countries, sectors):
     """ 
@@ -352,6 +358,19 @@ def _get_M(data, countries, sectors):
     M = M.rename(columns={'trade_value':'i'})
     return M.squeeze() # Convert one-column pd.DataFrame to pd.Series
  
+def _update_M(all_imports, country_imports, country_name):
+    """
+    Insert a newly calculated import demand from a single country
+    into the model's vector of all import demands
+    """
+    M = all_imports
+    m = country_imports
+    # Now put the new import values back into M, the
+    # import vector. This is currently a bit tedious. Is there a better way?
+    M = M.swaplevel(0, 1) # Now indexed Country, Sector
+    M.ix[country_name] = m # Set the relevant country part
+    return M.swaplevel(1, 0) # Swapped back
+            
 def _get_E(imports):
     M = imports    
     E = M * 0
@@ -404,14 +423,10 @@ def _world_import_requirements(countries, imports, exports, tolerance):
         # and apply it as an export vector to the current
         # country
         e = E.ix[:, country_name]
-        i = country.recalculate_economy(final_demand=country.f, 
+        m = country.recalculate_economy(final_demand=country.f, 
                                         exports=e,
                                         tolerance=tolerance)
-        # Now put the new import values back into M, the
-        # import vector. This is currently a bit tedious. Is there a better way?
-        M = M.swaplevel(0, 1) # Now indexed Country, Sector
-        M.ix[country_name] = i # Set the relevant country part
-        M = M.swaplevel(1, 0) # Swapped back
+        M = _update_M(M, m, country_name)
     return M
                             
 def _relevant_flows(trade_flows, countries):
