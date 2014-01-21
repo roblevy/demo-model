@@ -5,6 +5,7 @@ Created on Wed Jun 19 15:26:10 2013
 @author: rob
 """
 import numpy as np
+import pandas as pd
 from gdm_library import diagonalise
 
 class Country(object):
@@ -63,6 +64,8 @@ class Country(object):
         self.e = export_demand
         self.m = import_demand
         self.n = export_demand * 0
+        self.flow_deltas = technical_coefficients * 0
+        self.stock_deltas = export_demand * 0
         
         if name != 'RoW':
             self.A = technical_coefficients
@@ -79,11 +82,11 @@ class Country(object):
     def __str__(self):
         return ' '.join(["Country:", self.name])
         
-    def recalculate_economy(self, 
+    def recalculate_economy(self, tolerance,
                             final_demand = None, 
                             exports = None, 
                             investments = None,
-                            tolerance, calculate_deltas=False):
+                            calculate_deltas = False):
         """
         Calculate a new import vector from a set of demands.
         
@@ -140,6 +143,9 @@ class Country(object):
                 self.x = self._domestic_reqs(total_demand)
                 m = self._import_reqs(self.x, total_demand)
             
+            if calculate_deltas:
+                [self.stock_deltas, 
+                 self.flow_deltas] = self._calculate_deltas(m, n, e, f, tolerance)
             # Update Country-level variables:
             self.m = m
             self.n = n
@@ -149,17 +155,8 @@ class Country(object):
             # The change in input vectors is not deemed big enough
             # to be worth recalculating anything
             m = self.m
-        
+
         return m
-    
-    def _calculate_deltas(imports, investments, exports, final_demand,
-                          tolerance):
-        """
-        Returns any changes in either flows (sector-sector) or 'stocks'
-        (imports, exports, investments, final demand) which are greater
-        than `tolerance'
-        """
-        
     
     def gross_output(self):
         """
@@ -265,6 +262,25 @@ class Country(object):
     def _RoW_domestic_reqs(self, e):
         return e        
             
+    def _calculate_deltas(self, imports, investments, exports, 
+                          final_demand,
+                          tolerance):
+        """
+        Returns any changes in either flows (sector-sector) or 'stocks'
+        (imports, exports, investments, final demand) which are greater
+        than `tolerance'
+        """
+        fdels = pd.DataFrame(columns=['type','from',
+                                      'to','delta']) # flow deltas
+        sdels = pd.DataFrame(columns=['type','stock','delta']) # stock deltas
+        
+        # Stock deltas:    
+        mdel = _deltas(imports, self.m, tolerance)
+        ndel = _deltas(investments, self.n, tolerance)
+        edel = _deltas(exports, self.e, tolerance)
+        fddel = _deltas(final_demand, self.f, tolerance)
+        sdels = mdel.append(ndel).append(edel).append(fddel)
+        
   
 def _change_is_significant(old, new, tolerance):
     """
@@ -275,4 +291,21 @@ def _change_is_significant(old, new, tolerance):
     of the Series is greater than tolerance.
     """
     return any(np.greater(np.abs(old - new), tolerance))
+
+def _deltas(old, new, tolerance):
+    """
+    Calculate `new' - `old' and return those values greater than `tolerance'
+    
+    Parameters
+    ----------
+    old : pd.Series
+    
+    new : pd.Series
+    
+    tolerance : float        
+    """
+    
+    deltas = new.reset_index() - old.reset_index()
+    deltas['type'] = old.name    
+    return deltas[deltas > tolerance]
 

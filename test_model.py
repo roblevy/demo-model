@@ -33,21 +33,21 @@ model = global_demo_model.GlobalDemoModel.from_data(sector_flows,
 #%%
 # Test country object    
 gbr = model.countries['GBR']
-i = gbr.i.copy()
+m = gbr.m.copy()
 x = gbr.x.copy()
 f = gbr.f.copy()
 e = gbr.e.copy()
 gbr.recalculate_economy(f, e) # nothing should happen
 rtol = 1e-8 # Since numbers are measured in billions, we need a very fine tolerance here!
 print "Test no change when existing f and e are used:"
-print np.allclose(i, gbr.i,rtol=rtol) & np.allclose(x, gbr.x,rtol=rtol)
+print np.allclose(m, gbr.m,rtol=rtol) & np.allclose(x, gbr.x,rtol=rtol)
 f = f.copy()
 f["Agriculture"] = f["Agriculture"] + 100000
 gbr.recalculate_economy(f, e)
-print "Test that when f and e are changed, both x and i change"
-print ~(np.allclose(i,gbr.i,rtol=rtol)) & ~(np.allclose(x,gbr.x,rtol=rtol))
-print "Test that when f and e are changed, x + i = Ax + f + e"
-print np.allclose(gbr.x + gbr.i, np.dot(gbr.A, gbr.x) + gbr.f + gbr.e,rtol=rtol)
+print "Test that when f and e are changed, both x and m change"
+print ~(np.allclose(m,gbr.m,rtol=rtol)) & ~(np.allclose(x,gbr.x,rtol=rtol))
+print "Test that when f and e are changed, x + m = Ax + f + e"
+print np.allclose(gbr.x + gbr.m, np.dot(gbr.A, gbr.x) + gbr.f + gbr.e,rtol=rtol)
 
 # Run the model
 model.recalculate_world()
@@ -64,10 +64,10 @@ print np.alltrue(model.countries['GBR'].x > gbrx) and np.alltrue(model.countries
 print "Test that decreasing one country/sector's final demand decreases all sector's output for whole world."
 gbrx = model.countries['GBR'].x
 usax = model.countries['USA'].x
-usai = model.countries['USA'].i
+usai = model.countries['USA'].m
 model.set_final_demand('GBR','Agriculture',
                        model.countries['GBR'].f['Agriculture'] / 2)
 print np.alltrue(model.countries['GBR'].x < gbrx) and np.alltrue(model.countries['USA'].x < usax)
-print np.alltrue(model.countries['USA'].i < usai)
+print np.alltrue(model.countries['USA'].m < usai)
 
-model.to_file('../test.gdm')
+model.to_file('../model.gdm')
