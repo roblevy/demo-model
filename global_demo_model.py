@@ -149,7 +149,7 @@ class GlobalDemoModel(object):
         E = self.exports
         P = self._import_propensities
         for i in range(__MAX_ITERATIONS__):
-            [M, E] = _iterate_model(M, E, P, countries)                
+            [M, E] = _iterate_model(M, E, P, countries, tolerance)                
             deficit = _export_deficit(M, E)
             if abs(deficit) < tolerance:
                 self.imports = M
@@ -331,7 +331,8 @@ def _in(data, inlist, col_name, notin=False):
     else:
         return data[data[col_name].isin(inlist)]
 
-def _iterate_model(imports, exports, import_propensities, countries):
+def _iterate_model(imports, exports, import_propensities, countries,
+                   tolerance):
     """ Calculate export requirements. Apply these requirements
     to the export demand of each country. """
     M = imports
@@ -339,7 +340,7 @@ def _iterate_model(imports, exports, import_propensities, countries):
     P = import_propensities
     
     E = _world_export_requirements(M, E, P)
-    M = _world_import_requirements(countries, M, E)
+    M = _world_import_requirements(countries, M, E, tolerance)
     return M, E
         
 def _get_M(data, countries, sectors):
@@ -391,7 +392,7 @@ def _world_export_requirements(imports, exports, import_propensities):
         E.ix[s] = e_s.squeeze()
     return E
     
-def _world_import_requirements(countries, imports, exports):
+def _world_import_requirements(countries, imports, exports, tolerance):
     """ For each country in countries, select the correct
     vector of exports from E and recalculate that countries
     economy on the basis of the new export demand"""
@@ -404,7 +405,8 @@ def _world_import_requirements(countries, imports, exports):
         # country
         e = E.ix[:, country_name]
         i = country.recalculate_economy(final_demand=country.f, 
-                                        exports=e)
+                                        exports=e,
+                                        tolerance=tolerance)
         # Now put the new import values back into M, the
         # import vector. This is currently a bit tedious. Is there a better way?
         M = M.swaplevel(0, 1) # Now indexed Country, Sector

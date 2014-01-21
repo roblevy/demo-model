@@ -7,8 +7,6 @@ Created on Wed Jun 19 15:26:10 2013
 import numpy as np
 from gdm_library import diagonalise
 
-__eps__ = 1
-
 class Country(object):
     """
     
@@ -84,7 +82,8 @@ class Country(object):
     def recalculate_economy(self, 
                             final_demand = None, 
                             exports = None, 
-                            investments = None):
+                            investments = None,
+                            tolerance):
         """
         Calculate a new import vector from a set of demands.
         
@@ -97,13 +96,19 @@ class Country(object):
         
         Parameters
         ----------
-        final_demand : pandas.Series optional
+        final_demand : pandas.Series, optional
             A vector of final demands, indexed on sector
         exports : pandas.Series optional
             A vector of export demands, indexed on sector
         investments : pandas.Series, optional
             A vector of investment demands, indexed on sector. Defaults to
             zero.
+        tolerance : float
+            At least one element of either final_demand, exports or 
+            investment must be different from their existing 
+            values for this procedure to actually do anything.
+            `tolerance` sets what counts as "different".
+            
             
         Returns
         -------
@@ -123,9 +128,9 @@ class Country(object):
         if n is None:
             n = self.n
             
-        if (_change_is_significant(f, self.f) or 
-            _change_is_significant(e, self.e) or
-            _change_is_significant(n, self.n)):
+        if (_change_is_significant(f, self.f, tolerance) or 
+            _change_is_significant(e, self.e, tolerance) or
+            _change_is_significant(n, self.n, tolerance)):
             if self.name == 'RoW':
                 # See section: Calibration of 'Rest of World' entity in the paper
                 self.x = self._RoW_domestic_reqs(e)
@@ -252,14 +257,13 @@ class Country(object):
         return e        
             
   
-def _change_is_significant(old, new):
+def _change_is_significant(old, new, tolerance):
     """
     Test two comparable pandas.Series objects to see if 
     anything has changed 'much'
     
     True if any of the absolute differences in the values
-    of the Series is greater than __eps__, a module-level
-    variable.
+    of the Series is greater than tolerance.
     """
-    return any(np.greater(np.abs(old - new), __eps__))
+    return any(np.greater(np.abs(old - new), tolerance))
 
