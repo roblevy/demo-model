@@ -121,7 +121,7 @@ class GlobalDemoModel(object):
         (M, E, P) = _initialise(relevant_flows, countries, sectors)
         return cls(countries, sectors, M, E, P, calculate=True)
 
-    def recalculate_world(self):
+    def recalculate_world(self, tolerance=__DEFICIT_TOLERANCE__):
         """ 
         Iterate between setting import demands and export demands until
         trade in all sectors balances.
@@ -132,11 +132,18 @@ class GlobalDemoModel(object):
         input-output model. This process is repeated at most __MAX_ITERATIONS__ times,
         or until the global trade deficit < __DEFICIT_TOLERANCE__
         
+        Parameters        
+        ----------
+        tolerance : float
+            the value of the export deficit below which iteration
+            stops
+        
         Returns
         -------
         bool
             True if the world converged after `__MAX_ITERATIONS__`
         """
+        
         countries = self.countries
         M = self.imports
         E = self.exports
@@ -144,7 +151,7 @@ class GlobalDemoModel(object):
         for i in range(__MAX_ITERATIONS__):
             [M, E] = _iterate_model(M, E, P, countries)                
             deficit = _export_deficit(M, E)
-            if abs(deficit) < __DEFICIT_TOLERANCE__:
+            if abs(deficit) < tolerance:
                 self.imports = M
                 self.exports = E
                 print "World recalculated after %i iterations." % i                
@@ -263,7 +270,7 @@ class GlobalDemoModel(object):
         pandas.Series
             A pandas.Series of gross_outputs, indexed on country.
         """
-        country_names = list(self.country_names)
+        country_names = list(self.country_names) # Make a copy
         if not with_RoW:
             country_names.remove('RoW')
         g_out = pd.Series(0, index=country_names)
