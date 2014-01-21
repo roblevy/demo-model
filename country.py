@@ -44,7 +44,7 @@ class Country(object):
             A vector of final demands, indexed on sector
         e : pandas.Series
             A vector of export demands, indexed on sector
-        i : pandas.Series
+        m : pandas.Series
             A vector of import requirements, indexed on sector
         d : pandas.Series
             A vector of import ratios, defining what proportion of the total demand
@@ -61,7 +61,7 @@ class Country(object):
         self.name = name
         self.f = final_demand
         self.e = export_demand
-        self.i = import_demand
+        self.m = import_demand
         self.n = export_demand * 0
         
         if name != 'RoW':
@@ -83,7 +83,7 @@ class Country(object):
                             final_demand = None, 
                             exports = None, 
                             investments = None,
-                            tolerance):
+                            tolerance, calculate_deltas=False):
         """
         Calculate a new import vector from a set of demands.
         
@@ -114,7 +114,7 @@ class Country(object):
         -------
         pandas.Series
             A vector of import demands, indexed on sector. Note that this
-            function also sets the module-level variable `i`, so the return
+            function also sets the module-level variable `m`, so the return
             value is only returned for convenience and can safely be discarded.
         """
         f = final_demand
@@ -134,23 +134,32 @@ class Country(object):
             if self.name == 'RoW':
                 # See section: Calibration of 'Rest of World' entity in the paper
                 self.x = self._RoW_domestic_reqs(e)
-                i = self._RoW_import_reqs(f)
+                m = self._RoW_import_reqs(f)
             else:
                 total_demand = f + e + n
                 self.x = self._domestic_reqs(total_demand)
-                i = self._import_reqs(self.x, total_demand)
+                m = self._import_reqs(self.x, total_demand)
             
             # Update Country-level variables:
-            self.i = i
+            self.m = m
             self.n = n
             self.e = e
             self.f = f
         else:
             # The change in input vectors is not deemed big enough
             # to be worth recalculating anything
-            i = self.i
+            m = self.m
         
-        return i
+        return m
+    
+    def _calculate_deltas(imports, investments, exports, final_demand,
+                          tolerance):
+        """
+        Returns any changes in either flows (sector-sector) or 'stocks'
+        (imports, exports, investments, final demand) which are greater
+        than `tolerance'
+        """
+        
     
     def gross_output(self):
         """
@@ -162,7 +171,7 @@ class Country(object):
         """
         return self.x.sum()
         
-    def B(self):
+    def Z(self):
         """
         Sector-to-sector flows. 
         
@@ -172,17 +181,17 @@ class Country(object):
         xhat = diagonalise(self.x)        
         return self.A.dot(xhat) # Total flows = A.xhat
         
-    def B_dagger(self):
+    def Z_dagger(self):
         """
         Sector-to-sector flows (domestic only)
         """
-        return self.B.dot(self.D) 
+        return self.Z.dot(self.D) 
 
-    def B_star(self):
+    def Z_star(self):
         """
         Sector-to-sector flows (imports only)
         """
-        return self.B.dot(self._I - self.D)
+        return self.Z.dot(self._I - self.D)
         
     def f_dagger(self):
         """
@@ -205,7 +214,7 @@ class Country(object):
         Given domestic requirements, total demand and the import ratios, 
         calculate import demand.
         
-        Calculates :math:`i = (I - D)^-1 Dx`
+        Calculates :math:`m = (I - D)^-1 Dx`
         where D is the diagonal matrix of import ratios.
         The inverse in the first part of the right-hand-side has no
         solution where D contains elements = 1. If these are replaced
@@ -224,9 +233,9 @@ class Country(object):
         else:
             ddash = self.d
         x = domestic_requirements
-        i = ddash.mul(x).div(1 - ddash)
-        i[i == 0] = total_demand # set to total_demand where 0
-        return i
+        m = ddash.mul(x).div(1 - ddash)
+        m[m == 0] = total_demand # set to total_demand where 0
+        return m
 
     def _domestic_reqs(self,total_demand):
         """calculate the production requirements, x, using the 
