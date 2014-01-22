@@ -5,7 +5,6 @@ Created on Wed Jun 19 15:26:10 2013
 @author: rob
 """
 import numpy as np
-import pandas as pd
 from gdm_library import diagonalise
 
 class Country(object):
@@ -85,8 +84,7 @@ class Country(object):
     def recalculate_economy(self, tolerance,
                             final_demand = None, 
                             exports = None, 
-                            investments = None,
-                            calculate_deltas = False):
+                            investments = None):
         """
         Calculate a new import vector from a set of demands.
         
@@ -143,9 +141,6 @@ class Country(object):
                 self.x = self._domestic_reqs(total_demand)
                 m = self._import_reqs(self.x, total_demand)
             
-            if calculate_deltas:
-                [self.stock_deltas, 
-                 self.flow_deltas] = self._calculate_deltas(m, n, e, f, tolerance)
             # Update Country-level variables:
             self.m = m
             self.n = n
@@ -261,26 +256,7 @@ class Country(object):
         
     def _RoW_domestic_reqs(self, e):
         return e        
-            
-    def _calculate_deltas(self, imports, investments, exports, 
-                          final_demand,
-                          tolerance):
-        """
-        Returns any changes in either flows (sector-sector) or 'stocks'
-        (imports, exports, investments, final demand) which are greater
-        than `tolerance'
-        """
-        fdels = pd.DataFrame(columns=['type','from',
-                                      'to','delta']) # flow deltas
-        sdels = pd.DataFrame(columns=['type','stock','delta']) # stock deltas
-        
-        # Stock deltas:    
-        mdel = _deltas(imports, self.m, tolerance)
-        ndel = _deltas(investments, self.n, tolerance)
-        edel = _deltas(exports, self.e, tolerance)
-        fddel = _deltas(final_demand, self.f, tolerance)
-        sdels = mdel.append(ndel).append(edel).append(fddel)
-        
+                    
   
 def _change_is_significant(old, new, tolerance):
     """
@@ -292,20 +268,4 @@ def _change_is_significant(old, new, tolerance):
     """
     return any(np.greater(np.abs(old - new), tolerance))
 
-def _deltas(old, new, tolerance):
-    """
-    Calculate `new' - `old' and return those values greater than `tolerance'
-    
-    Parameters
-    ----------
-    old : pd.Series
-    
-    new : pd.Series
-    
-    tolerance : float        
-    """
-    
-    deltas = new.reset_index() - old.reset_index()
-    deltas['type'] = old.name    
-    return deltas[deltas > tolerance]
 

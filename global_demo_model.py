@@ -9,6 +9,7 @@ import pandas as pd
 import country_setup
 import cPickle
 from import_propensities import calculate_import_propensities as get_P
+import copy
 
 reload(country_setup)
 
@@ -62,6 +63,7 @@ class GlobalDemoModel(object):
             unique values from the country_iso3 column of sector_flows.
 
         """
+        self.tolerance = __DEFICIT_TOLERANCE__
         self.countries = countries
         self.sectors = sectors
         self.country_names = countries.keys()
@@ -70,7 +72,7 @@ class GlobalDemoModel(object):
         self._import_propensities = import_propensities
 
         self.id_list = _create_country_sector_ids(self.country_names, sectors)
-
+        self.deltas = pd.DataFrame()
         if calculate:
             # Perform the first calculation of the model
             self.recalculate_world()
@@ -121,9 +123,14 @@ class GlobalDemoModel(object):
         (M, E, P) = _initialise(relevant_flows, countries, sectors)
         return cls(countries, sectors, M, E, P, calculate=True)
 
+    def set_tolerance(self, tolerance):
+        self.tolerance = tolerance        
+        
     def recalculate_world(self, 
-                          tolerance=__DEFICIT_TOLERANCE__,
-                          calculate_deltas=False):
+                          tolerance=None,
+                          calculate_deltas=False,
+                          countries=None,
+                          imports=None):
         """ 
         Iterate between setting import demands and export demands until
         trade in all sectors balances.
@@ -132,11 +139,11 @@ class GlobalDemoModel(object):
         requirements, use the import propensities to calculate export requirements
         per sector-country, and apply these export requirements to each country's
         input-output model. This process is repeated at most __MAX_ITERATIONS__ times,
-        or until the global trade deficit < __DEFICIT_TOLERANCE__
+        or until the global trade deficit < self.tolerance
         
         Parameters        
         ----------
-        tolerance : float
+        tolerance : float, optional
             the value of the export deficit below which iteration
             stops
         
@@ -145,10 +152,18 @@ class GlobalDemoModel(object):
         bool
             True if the world converged after `__MAX_ITERATIONS__`
         """
-        
-        countries = self.countries
-        M = self.imports
-        E = self.exports
+        if tolerance is None:
+            tolerance = self.tolerance
+        if calculate_deltas:
+            if countries is None:
+                countries = copy.deepcopy(self.countries)
+        else:
+            countries = self.countries
+        if imports is None:
+            M = self.imports
+        else:
+            M = imports
+        E = M * 0
         P = self._import_propensities
         for i in range(__MAX_ITERATIONS__):
             [M, E] = _iterate_model(M, E, P, countries, tolerance)                
@@ -156,13 +171,18 @@ class GlobalDemoModel(object):
             if abs(deficit) < tolerance:
                 self.imports = M
                 self.exports = E
-                print "World recalculated after %i iterations." % i                
-                return True
+                print "World recalculated after %i iterations." % i
+                if calculate_deltas:
+                    self.deltas = self._calculate_deltas(countries, 
+                                                         self.countries,
+                                                         imports,
+                                                         tolerance)
+                return True    
         print "Warning: World didn't converge " \
               "after %i iterations." % __MAX_ITERATIONS__
         return False
             
-    def trade_flows(self, sector):
+    def trade_flows(self, sector, imports=None):
         """
         From-country to-country flows for the given sector.
         
@@ -170,13 +190,29 @@ class GlobalDemoModel(object):
         matrix for the given sector, and :math:`M` is the import demand vector
         for the given sector.
         """
-        M = self.imports.ix[sector]
+        if imports is None:
+            imports = self.imports
+        m = imports.ix[sector]
         P = self._import_propensities[sector]
-        return P * M
+        return P * m
+    
+    def total_production(self, sector, countries=None):
+        """
+        total production,x, for all countries (except RoW) in the given
+        sector
+        """
+        if countries is None:
+            countries = self.countries
+        x = pd.Series()
+        for c in countries.itervalues():
+            cx = pd.Series(c.x[sector], index=[c.name])
+            x = cx.append(x)
+        x.name = "x"
+        x.index.name = "country"
+        return x
     
     def set_final_demand(self, country_name, sector, value, 
-                         recalculate=True, 
-                         tolerance=__DEFICIT_TOLERANCE__,
+                         tolerance=None,
                          calculate_deltas=False):
         """
         Set the `sector` element of the $f$ vector in `country_name`
@@ -196,17 +232,20 @@ class GlobalDemoModel(object):
         recalculate : bool optional
             Recalculate the model?
         """
-        country = self.countries[country_name]        
-        f = country.f.copy()
-        f[sector] = value
-        # Get new import demand for country        
-        new_m = country.recalculate_economy(final_demand=f, 
-                                            tolerance=tolerance,
-                                            calculate_deltas=calculate_deltas)
-        # Put new import demand into self.imports
-        self.imports = _update_M(self.imports, new_m, country_name)
-        if recalculate:
-            self.recalculate_world()
+        if value > 0:
+            if tolerance is None:
+                tolerance = self.tolerance
+            if calculate_deltas:
+                countries = copy.deepcopy(self.countries)
+            else:
+                countries = self.countries
+            country = countries[country_name]        
+            f = country.f.copy()
+            f[sector] = value
+            imports = _get_import_demand(self.imports, tolerance, country,
+                                         final_demand=f)
+            self.recalculate_world(tolerance, calculate_deltas, 
+                                   countries, imports)
     
     def final_demand(self):
         """
@@ -299,6 +338,33 @@ class GlobalDemoModel(object):
                      open(filename,'wb'))
 #                     protocol=cPickle.HIGHEST_PROTOCOL)
     
+    def _calculate_deltas(self, new_countries, old_countries, 
+                          imports, tolerance):
+    
+        deltas = pd.DataFrame()
+        for s in self.sectors:
+            # Flow deltas
+            new_flows = self.trade_flows(s, imports).stack()
+            old_flows = self.trade_flows(s).stack()
+            delta = _deltas(new_flows, old_flows, s, 'trade', tolerance)
+            if len(delta) > 0:
+                delta = delta.rename(columns={'level_1':'country2',
+                                              'from_iso3':'country1',
+                                              'to_iso3':'country2'})
+                delta = delta[(delta.country1 != 'RoW') & 
+                              (delta.country2 != 'RoW')]
+                deltas = delta.append(deltas)
+            # Total production deltas
+            new_x = self.total_production(s, new_countries)
+            old_x = self.total_production(s)
+            delta = _deltas(new_x, old_x, s, 'x', tolerance)
+            if len(delta) > 0:
+                delta = delta.rename(columns={'level_1':'to_iso3',
+                                              'country':'country1'})
+                delta = delta[(delta.country1 != 'RoW')]
+                deltas = deltas.append(delta)
+        return deltas
+
     def get_id(self, country, sector):
         the_id = [ k for k, v in self.id_list.iteritems() 
                      if v['country'] == country and v['sector'] == sector ]
@@ -325,8 +391,8 @@ def _initialise(data, countries, sectors):
     Perform step 0, initialisation, of the algorithm in the
     paper
     """
-    M = _get_M(data, countries, sectors)
-    E = _get_E(M)
+    M = _create_M(data, countries, sectors)
+    E = _create_E(M)
     P = get_P(data, M, countries, sectors)
     print "Initialisation complete"
     return M, E, P
@@ -349,7 +415,7 @@ def _iterate_model(imports, exports, import_propensities, countries,
     M = _world_import_requirements(countries, M, E, tolerance)
     return M, E
         
-def _get_M(data, countries, sectors):
+def _create_M(data, countries, sectors):
     # Construct a blank dataframe to house the import values        
     M = pd.DataFrame([[s, c, 0] for s in sectors for c in countries],
                      columns=['sector','to_iso3','trade_value'])
@@ -358,25 +424,33 @@ def _get_M(data, countries, sectors):
     M = M.rename(columns={'trade_value':'i'})
     return M.squeeze() # Convert one-column pd.DataFrame to pd.Series
  
-def _update_M(all_imports, country_imports, country_name):
+def _get_import_demand(current_imports,
+                       tolerance,
+                       country,
+                       exports=None,
+                       investments=None,
+                       final_demand=None
+                       ):
     """
     Insert a newly calculated import demand from a single country
     into the model's vector of all import demands
     """
-    M = all_imports
-    m = country_imports
+    m = country.recalculate_economy(tolerance,
+                                    final_demand=final_demand,
+                                    investments=investments, 
+                                    exports=exports)
+    M = current_imports
     # Now put the new import values back into M, the
     # import vector. This is currently a bit tedious. Is there a better way?
     M = M.swaplevel(0, 1) # Now indexed Country, Sector
-    M.ix[country_name] = m # Set the relevant country part
+    M.ix[country.name] = m # Set the relevant country part
     return M.swaplevel(1, 0) # Swapped back
             
-def _get_E(imports):
+def _create_E(imports):
     M = imports    
     E = M * 0
     E.index.names[1] = 'from_iso3'
     return E
-
 
 def _export_deficit(imports, exports):
     """
@@ -423,10 +497,8 @@ def _world_import_requirements(countries, imports, exports, tolerance):
         # and apply it as an export vector to the current
         # country
         e = E.ix[:, country_name]
-        m = country.recalculate_economy(final_demand=country.f, 
-                                        exports=e,
-                                        tolerance=tolerance)
-        M = _update_M(M, m, country_name)
+        M = _get_import_demand(M, tolerance, country,
+                               exports=e)
     return M
                             
 def _relevant_flows(trade_flows, countries):
@@ -479,3 +551,21 @@ def _create_country_sector_ids(country_names, sectors):
             id_list[i] = ({"country":c, "sector":s})
             i += 1
     return id_list
+        
+    
+def _deltas(new, old, sector, type_name, tolerance):
+    """
+    Calculate `new' - `old' and return those values greater than `tolerance'
+    
+    Parameters
+    ----------
+    old : pd.Series
+    
+    new : pd.Series
+    
+    tolerance : float        
+    """
+    deltas = pd.DataFrame(new - old, columns=['delta'])
+    deltas['type'] = type_name
+    deltas['sector'] = sector
+    return deltas[deltas.delta.abs() > tolerance].reset_index()
