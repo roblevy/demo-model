@@ -408,7 +408,7 @@ class GlobalDemoModel(object):
         D = pd.DataFrame(D, index=cs_labels, columns=cs_labels)
         X = pd.DataFrame(X, index=cs_labels, columns=cs_labels)
         P_tilde = P.ix[cs_labels,cs_labels]
-        trade_flows = P_tilde.dot(D).dot(A).dot(X)
+        return P_tilde.dot(D).dot(A).dot(X)
     
     def _calculate_deltas(self, new_countries, old_countries, 
                           imports, tolerance):
