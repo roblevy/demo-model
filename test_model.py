@@ -48,7 +48,7 @@ f["Agriculture"] = f["Agriculture"] + 100000
 gbr.recalculate_economy(tolerance=rtol,
                         final_demand=f,
                         exports=e)
-print "Test that when f \and e are changed, both x and m change"
+print "Test that when f and e are changed, both x and m change"
 print ~(np.allclose(m,gbr.m,rtol=rtol)) & ~(np.allclose(x,gbr.x,rtol=rtol))
 print "Test that when f and e are changed, x + m = Ax + f + e"
 print np.allclose(gbr.x + gbr.m, np.dot(gbr.A, gbr.x) + gbr.f + gbr.e,rtol=rtol)

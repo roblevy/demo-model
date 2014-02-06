@@ -449,17 +449,32 @@ class GlobalDemoModel(object):
         See http://www.mapequation.org/apps/MapGenerator.html#fileformats
         for details.
         """
+        if filename[-4:] != '.net':
+            filename += '.net'
         adj = self.adjancency_matrix()
-        nodes = '\n'.join(['%i %s' % (i, c) 
-                 for i, c in enumerate(adj.columns)]):
         flows = adj.stack().reset_index()
-        
+        nodes = zip(*pd.factorize(adj.columns))
+        from_nodes = pd.factorize(flows['from'])
+        to_nodes = pd.factorize(flows['to'])
+        flows['from_number'] = from_nodes[0]
+        flows['to_number'] = to_nodes[0]
+        # Now build the output file
+        out = '*Vertices %i\n' % len(nodes)
+        out += '\n'.join(['%i "%s"' % (i, x) for i, x in nodes])
+        out += '\nArcs %i\n' % len(flows)
+        out += flows.to_string(columns=['from_number', 'to_number', 0],
+                               header=False, index=False)
+        with open(filename, 'w') as text_file:
+            text_file.write(out)
+        print '%s written' % filename
+                       
 
     def get_id(self, country, sector):
         the_id = [ k for k, v in self.id_list.iteritems() 
                      if v['country'] == country and v['sector'] == sector ]
         if len(the_id) > 1:
-            print "Key error in model's id_list: [%s, %s] has multiple entries" % (country, sector)
+            print "Key error in model's id_list: [%s, %s] has " \
+                "multiple entries" % (country, sector)
         if len(the_id) < 1:
             print "(%s, %s) not found" % (country, sector)
             return None
