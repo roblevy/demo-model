@@ -37,14 +37,18 @@ m = gbr.m.copy()
 x = gbr.x.copy()
 f = gbr.f.copy()
 e = gbr.e.copy()
-gbr.recalculate_economy(f, e) # nothing should happen
 rtol = 1e-8 # Since numbers are measured in billions, we need a very fine tolerance here!
+gbr.recalculate_economy(tolerance=rtol,
+                        final_demand=f,
+                        exports=e) # nothing should happen
 print "Test no change when existing f and e are used:"
 print np.allclose(m, gbr.m,rtol=rtol) & np.allclose(x, gbr.x,rtol=rtol)
 f = f.copy()
 f["Agriculture"] = f["Agriculture"] + 100000
-gbr.recalculate_economy(f, e)
-print "Test that when f and e are changed, both x and m change"
+gbr.recalculate_economy(tolerance=rtol,
+                        final_demand=f,
+                        exports=e)
+print "Test that when f \and e are changed, both x and m change"
 print ~(np.allclose(m,gbr.m,rtol=rtol)) & ~(np.allclose(x,gbr.x,rtol=rtol))
 print "Test that when f and e are changed, x + m = Ax + f + e"
 print np.allclose(gbr.x + gbr.m, np.dot(gbr.A, gbr.x) + gbr.f + gbr.e,rtol=rtol)
@@ -70,4 +74,4 @@ model.set_final_demand('GBR','Agriculture',
 print np.alltrue(model.countries['GBR'].x < gbrx) and np.alltrue(model.countries['USA'].x < usax)
 print np.alltrue(model.countries['USA'].m < usai)
 
-model.to_file('../model.gdm')
+#model.to_file('../model.gdm')
