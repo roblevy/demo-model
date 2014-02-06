@@ -177,13 +177,13 @@ class Country(object):
         """
         Sector-to-sector flows (domestic only)
         """
-        return self.Z.dot(self.D) 
+        return self.Z().dot(self.D) 
 
     def Z_star(self):
         """
         Sector-to-sector flows (imports only)
         """
-        return self.Z.dot(self._I - self.D)
+        return self.Z().dot(self._I - self.D)
         
     def f_dagger(self):
         """
