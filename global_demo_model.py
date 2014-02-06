@@ -6,6 +6,7 @@ Created on Mon Jul 01 11:57:49 2013
 """
 
 import pandas as pd
+import numpy as np
 import country_setup
 import cPickle
 from import_propensities import calculate_import_propensities as get_P
@@ -338,6 +339,77 @@ class GlobalDemoModel(object):
                      open(filename,'wb'))
 #                     protocol=cPickle.HIGHEST_PROTOCOL)
     
+    def adjancency_matrix(self):
+        """
+        A single, unified adjancency matrix of all flows
+        
+        This uses the fact that country/sector-country-sector
+        flow :math:`y_{r,s}^{(i,j)}` can be calculated with 
+        :math:`a_{r,s}^{(j)} x_{s}^{(j)} d_{r}^{(j)} p_{r}^{(i,j)}`
+        """
+        # Some preparation for building huge matrices indexed
+        # by e.g. "GBR Wood"
+        countries = self.country_names
+        countries.sort()
+        sectors = self.sectors
+        sectors.sort()
+        cs_labels = ['%s %s' % (c, s) for c in countries 
+            for s in sectors]
+        sc_labels = ['%s %s' % (c, s) for s in sectors 
+            for c in countries]
+        c = len(self.countries)
+        s = len(self.sectors)
+        empty = np.zeros([c * s, c*s])
+        #%%
+        # Put together the csxcs flows matrix
+        # First the internal flows:
+        # Z = Axhat
+        # Z* = Z(I - dhat)
+        io_flows = empty.copy()
+        for i, country in enumerate(countries):    
+            if country != 'RoW':
+                country = self.countries[country]
+                start = i * s
+                end = start + s
+                Z_star = country.Z_star() # Z* = Axhat(I - dhat)
+                Z_star['from_country'] = country.name
+                Z_star = Z_star.set_index('from_country', append=True) \
+                    .swaplevel(0,1)
+                Z_star = Z_star.transpose()
+                Z_star['to_country'] = country.name
+                Z_star = Z_star.set_index('to_country', append=True) \
+                    .swaplevel(0,1)
+                Z_star = Z_star.transpose()
+                io_flows[start:end, start:end] = Z_star
+        io_flows = pd.DataFrame(io_flows, index=cs_labels, columns=cs_labels)
+        #%%
+        # Now the international flows:
+        # y = axdp
+        P = empty.copy()
+        for i, sector in enumerate(sectors):
+            start = i * c
+            end = start + c
+            P[start:end, start:end] = self.import_propensities()[sector]
+        P = pd.DataFrame(P, index=sc_labels, columns=sc_labels)
+        
+        #%%
+        A = empty.copy()
+        D = empty.copy()
+        X = empty.copy()
+        for i, country in enumerate(countries):
+            c = self.countries[country]
+            start = i * s
+            end = start + s
+            if country != 'RoW':
+                A[start:end, start:end] = c.A
+                D[start:end,start:end] = np.diag(c.d)
+                X[start:end,start:end] = np.diag(c.x)
+        A = pd.DataFrame(A, index=cs_labels, columns=cs_labels)
+        D = pd.DataFrame(D, index=cs_labels, columns=cs_labels)
+        X = pd.DataFrame(X, index=cs_labels, columns=cs_labels)
+        P_tilde = P.ix[cs_labels,cs_labels]
+        trade_flows = P_tilde.dot(D).dot(A).dot(X)
+    
     def _calculate_deltas(self, new_countries, old_countries, 
                           imports, tolerance):
     
@@ -364,6 +436,16 @@ class GlobalDemoModel(object):
                 delta = delta[(delta.country1 != 'RoW')]
                 deltas = deltas.append(delta)
         return deltas
+
+    def to_pajek(self, filename):
+        """
+        create a .net file according to the Pajek specification
+        
+        See http://www.mapequation.org/apps/MapGenerator.html#fileformats
+        for details.
+        """
+        
+        
 
     def get_id(self, country, sector):
         the_id = [ k for k, v in self.id_list.iteritems() 
