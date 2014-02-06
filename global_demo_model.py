@@ -392,7 +392,6 @@ class GlobalDemoModel(object):
             P[start:end, start:end] = self.import_propensities()[sector]
         P = pd.DataFrame(P, index=sc_labels, columns=sc_labels)
         
-        #%%
         A = empty.copy()
         D = empty.copy()
         X = empty.copy()
@@ -410,7 +409,11 @@ class GlobalDemoModel(object):
         P_tilde = P.ix[cs_labels,cs_labels]
         trade_flows = P_tilde.dot(D).dot(A).dot(X)
         
-        return io_flows + trade_flows
+        # now combine to produce all_flows
+        all_flows = io_flows + trade_flows
+        all_flows.index.name = 'from'
+        all_flows.columns.name = 'to'
+        return all_flows
     
     def _calculate_deltas(self, new_countries, old_countries, 
                           imports, tolerance):
@@ -447,7 +450,9 @@ class GlobalDemoModel(object):
         for details.
         """
         adj = self.adjancency_matrix()
-        
+        nodes = '\n'.join(['%i %s' % (i, c) 
+                 for i, c in enumerate(adj.columns)]):
+        flows = adj.stack().reset_index()
         
 
     def get_id(self, country, sector):
