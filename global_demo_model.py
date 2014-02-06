@@ -451,6 +451,7 @@ class GlobalDemoModel(object):
         """
         if filename[-4:] != '.net':
             filename += '.net'
+        print 'Writing to %s. This takes a while...' % filename
         adj = self.adjancency_matrix()
         flows = adj.stack().reset_index()
         nodes = zip(*pd.factorize(adj.columns))
@@ -466,6 +467,11 @@ class GlobalDemoModel(object):
                                header=False, index=False)
         with open(filename, 'w') as text_file:
             text_file.write(out)
+            for i, x in flows.iterrows():
+                row = '%s %s %s' % (x['from_number'],
+                                    x['to_number'],
+                                    x[0])
+                text_file.write(row)
         print '%s written' % filename
                        
 
