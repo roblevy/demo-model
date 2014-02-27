@@ -43,7 +43,8 @@ def jsonify_model(models, filename, sectors=[]):
             node['parent'] = country_ids[c.name]
             node['label'] = '%s FD' % c.name
             model_data['nodes'].append(node)
-            for sector_id, s in enumerate([sector for sector in model.sectors if sector in sectors]):
+            for sector_id, s in enumerate([sector for sector \
+                    in model.sectors if sector in sectors]):
                 # Sector nodes            
                 node = {}
                 node['size'] = c.x[s] # Total output of sector s in country c
@@ -53,7 +54,7 @@ def jsonify_model(models, filename, sectors=[]):
                 node['label'] = '%s %s' % (c.name, s)
                 model_data['nodes'].append(node)
                 # Import sector flows to final demand
-                link_value = c.f_star[s]
+                link_value = c.f_star()[s]
                 if link_value > import_cutoff:
                     link = {}
                     link['source'] = _country_id(country_ids, c.name)
@@ -62,7 +63,7 @@ def jsonify_model(models, filename, sectors=[]):
                     link['value'] = link_value
                     model_data['links'].append(link)
                 # Domestic sector flows to final demand
-                link_value = c.f_dagger[s]
+                link_value = c.f_dagger()[s]
                 if link_value > io_cutoff:
                     link = {}
                     link['source'] = model.get_id(c.name, s)
@@ -70,10 +71,11 @@ def jsonify_model(models, filename, sectors=[]):
                     link['group'] = sector_id
                     link['value'] = link_value
                     model_data['links'].append(link)
-                for sector_id2, s2 in enumerate([sector for sector in model.sectors if sector in sectors]):
+                for sector_id2, s2 in enumerate([sector for sector \
+                        in model.sectors if sector in sectors]):
                     if s != s2:           
                         # Internal flows (input-output)
-                        link_value = c.B_dagger[s2][s]
+                        link_value = c.Z_dagger()[s2][s]
                         if link_value > io_cutoff:
                             link = {}
                             link['source'] = model.get_id(c.name, s)
@@ -82,7 +84,7 @@ def jsonify_model(models, filename, sectors=[]):
                             link['value'] = link_value
                             model_data['links'].append(link)
                         # Import flows
-                        link_value = c.B_star[s2][s]
+                        link_value = c.Z_star()[s2][s]
                         if link_value > import_cutoff:
                             link = {}
                             link['source'] = _country_id(country_ids, c.name)

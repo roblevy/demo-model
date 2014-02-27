@@ -74,4 +74,4 @@ model.set_final_demand('GBR','Agriculture',
 print np.alltrue(model.countries['GBR'].x < gbrx) and np.alltrue(model.countries['USA'].x < usax)
 print np.alltrue(model.countries['USA'].m < usai)
 
-#model.to_file('../model.gdm')
+model.to_file('model.gdm')

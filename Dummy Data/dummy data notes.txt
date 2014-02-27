@@ -1,0 +1,31 @@
+Countries:
+A, B, C
+
+A:
+- Good at T
+- Consumes R and T
+- Exporter of S + T
+- Importer of S
+
+B:
+- Good at S
+- Consumes S and T
+- Exporter of S
+
+C:
+- Good at neither
+- Consumes S and T
+- Importer of T and S
+
+Sectors:
+R, S, T (Note that all sectors need themselves more than any other sector)
+T:
+- Needs lots of S
+- Not much R
+
+S: 
+- Needs T only
+
+R:
+- Needs only itself
+- Cheap to produce

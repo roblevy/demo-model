@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 
 def diagonalise(x):
-    return pd.DataFrame(np.diag(x), index=x.index, columns=x.index)
+    return pd.DataFrame(np.diag(x.squeeze()), index=x.index, columns=x.index)
 
 def limit_data(data, limit_field, limit_value, not_equals=False):
     

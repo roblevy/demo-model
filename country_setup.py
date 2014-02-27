@@ -8,6 +8,7 @@ Created on Mon Jul 01 12:14:04 2013
 import country as c
 import import_propensities
 import pandas as pd
+import numpy as np
 
 reload(import_propensities)
 reload(c)
@@ -22,7 +23,7 @@ def _get_technical_coefficients(Z,x):
     A = Z.reset_index(['from_sector'])
     A['x'] = rename_multiindex_level(x,'sector','to_sector')
     A['a'] = A['flow_value'] / A['x']
-    A['a'] = A['a'].fillna(0)
+    A['a'] = A['a'].replace(np.inf,0).fillna(0)
     A = A.set_index('from_sector',append=True).swaplevel(1,2)
     return A['a']
     
@@ -34,21 +35,26 @@ def create_countries_from_data(sector_flows, trade_flows):
       - the matrix of technical coefficients, A
       - the vector of import ratios, D
     for all the countries in the data
+    
+    Set any negative flows to zero
     """
     sector_flows = sector_flows.set_index(['country_iso3','from_sector','to_sector'])
     flows = sector_flows['flow_amount']
-
+    flows[flows < 0] = 0
     imports = flows[sector_flows['is_import']]
-    final_demand = flows[sector_flows['is_final_demand'] & sector_flows['from_production_sector']]
-    exports = flows[sector_flows['is_export'] & sector_flows['from_production_sector']]
-    domestic = flows[~sector_flows['is_import'] & sector_flows['from_production_sector']]
+    final_demand = flows[sector_flows['is_final_demand'] \
+        & sector_flows['from_production_sector']]
+    exports = flows[sector_flows['is_export'] \
+        & sector_flows['from_production_sector']]
+    domestic = flows[~sector_flows['is_import'] \
+        & sector_flows['from_production_sector']]
 
     # Domestic production (sum across all to_sector)
     x = domestic.sum(level=['country_iso3','from_sector'])
     x = rename_multiindex_level(x, 'from_sector','sector')
     # Imports (sum across all to_sector)
-    i = imports.sum(level=['country_iso3','from_sector'])
-    i = rename_multiindex_level(i, 'from_sector','sector')
+    m = imports.sum(level=['country_iso3','from_sector'])
+    m = rename_multiindex_level(m, 'from_sector','sector')
     # Exports. There are some negative export demands. Set these to zero
     e = exports.sum(level=['country_iso3','from_sector'])
     e[e < 0] = 0
@@ -58,12 +64,13 @@ def create_countries_from_data(sector_flows, trade_flows):
     f = final_demand.sum(level=['country_iso3','from_sector'])
     f = rename_multiindex_level(f, 'from_sector','sector')
     # Now work out the import ratios
-    d = i / (x + i)
+    d = m / (x + m)
     
     # Get only those flows relevant for input-output. Since we no longer care about
     # domestic versus imported, we simply sum to get the totals
     # First: 70x35 (including imports)    
-    Z = flows[sector_flows['from_production_sector'] & sector_flows['to_production_sector']]
+    Z = flows[sector_flows['from_production_sector'] \
+              & sector_flows['to_production_sector']]
     # Now: 35x35
     Z = Z.groupby(level=[0,1,2]).sum()
 
@@ -76,12 +83,12 @@ def create_countries_from_data(sector_flows, trade_flows):
     country_objects = {}
     for country in countries:
         country_objects[country] = c.Country(country, 
-            final_demand = f.ix[country], 
-            export_demand = e.ix[country],
-            import_demand = i.ix[country],
+            final_demand=f.ix[country], 
+            export_demand=e.ix[country],
+            import_demand=m.ix[country],
             # Create a matrix from long-format data
-            technical_coefficients = A.ix[country].unstack(1), 
-            import_ratios = d.ix[country])
+            technical_coefficients=A.ix[country].unstack(1), 
+            import_ratios=d.ix[country])
     return country_objects
 
 def create_RoW_country(stray_exports, stray_imports, sectors):

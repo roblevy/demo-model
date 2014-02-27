@@ -23,22 +23,27 @@ io_data = pd.read_csv(fname % 'fantasy_world_data',
 goods_flows = pd.read_csv(fname % 'fantasy_trade_flows',
                           true_values='t',false_values='f')
                                 
+#%%
 # Create models
-model_peace = global_demo_model.GlobalDemoModel(io_data, goods_flows, None)
-model_war = global_demo_model.GlobalDemoModel(io_data, goods_flows, None)
-
+model_peace = global_demo_model.GlobalDemoModel.from_data(io_data, goods_flows)
+model_war = global_demo_model.GlobalDemoModel.from_data(io_data, goods_flows)
+#%%
 # Run model
 model_peace.recalculate_world()
+model_peace.to_file('fantasy_model.gdm')
 
+#%%
 # Create war
-for sector in model_war.P:
+for sector in model_war.import_propensities():
     for country1 in model_war.countries:
         for country2 in model_war.countries:
             if set([country1,country2]) == set(['A','B']):
 
-                model_war.P[sector][country1][country2] = 0
+                model_war.import_propensities() \
+                    [sector][country1][country2] = 0
         
-        model_war.P[sector][:][country1] /= np.sum(model_war.P[sector][:][country1])
+        model_war.import_propensities()[sector][:][country1] \
+            /= np.sum(model_war.import_propensities()[sector][:][country1])
         
 # Run model
 model_war.recalculate_world()
@@ -46,18 +51,18 @@ model_war.recalculate_world()
 models = [model_peace,model_war]
 output_model.jsonify_model(models, 'fantasy')
 
-d = model_peace.c['D']
-b = model_peace.c['B']
-c = model_peace.c['C']
+d = model_peace.countries['D']
+b = model_peace.countries['B']
+c = model_peace.countries['C']
 
 print "d f_dagger:"
-print d.f_dagger
+print d.f_dagger()
 
 print "d f_star:"
-print d.f_star
+print d.f_star()
 
 print "b f_dagger:"
-print b.f_dagger
+print b.f_dagger()
 
 print "b f_star:"
-print b.f_star
+print b.f_star()

@@ -30,10 +30,10 @@ sector_flow_id,country_iso3,year,is_import,from_production_sector,to_production_
 ,A,3013,TRUE,t,f,f,t,f,f,,ML,,FD,10
 ,A,3013,TRUE,t,f,f,f,f,t,,ML,,EX,2.75
 ,B,3013,FALSE,t,t,f,f,f,f,,AG,,AG,0
-,B,3013,FALSE,t,t,f,f,f,f,,AG,,RM,0.124
-,B,3013,FALSE,t,t,f,f,f,f,,AG,,ML,0.039
-,B,3013,FALSE,t,f,f,t,f,f,,AG,,FD,0.1
-,B,3013,FALSE,t,f,f,f,f,t,,AG,,EX,0.0276
+,B,3013,FALSE,t,t,f,f,f,f,,AG,,RM,0
+,B,3013,FALSE,t,t,f,f,f,f,,AG,,ML,0
+,B,3013,FALSE,t,f,f,t,f,f,,AG,,FD,0
+,B,3013,FALSE,t,f,f,f,f,t,,AG,,EX,0
 ,B,3013,FALSE,t,t,f,f,f,f,,RM,,AG,0.111
 ,B,3013,FALSE,t,t,f,f,f,f,,RM,,RM,0
 ,B,3013,FALSE,t,t,f,f,f,f,,RM,,ML,3.71

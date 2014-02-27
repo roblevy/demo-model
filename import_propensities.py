@@ -30,7 +30,8 @@ def calculate_import_propensities(trade_data, import_totals, countries, sectors)
 #    
     # Now create the P matrices    
     for sector in sectors:  
-        P_i = pd.DataFrame(0,index=countries,columns=countries)
+        P_i = pd.DataFrame(0,index=sorted(countries.keys()),
+                           columns=sorted(countries.keys()))
         try:
             P_i = P_i.add(p_matrices.ix[sector],fill_value=0)
         except:
@@ -38,7 +39,8 @@ def calculate_import_propensities(trade_data, import_totals, countries, sectors)
         # Any columns which don't sum to unity, get the remainder
         # Coming from the RoW
         col_sums = P_i.sum(0)
-        P_i.ix['RoW'][col_sums < 1] = P_i.ix['RoW'][col_sums < 1] + (1 - col_sums)
+        P_i.ix['RoW'][col_sums < 1] = \
+            P_i.ix['RoW'][col_sums < 1] + (1 - col_sums)
         P_i.columns.name = 'to_iso3'
         P_i.index.name = 'from_iso3'
         P[sector] = P_i

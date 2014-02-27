@@ -81,10 +81,11 @@ class Country(object):
     def __str__(self):
         return ' '.join(["Country:", self.name])
         
-    def recalculate_economy(self, tolerance,
+    def recalculate_economy(self, 
                             final_demand = None, 
                             exports = None, 
-                            investments = None):
+                            investments = None,
+                            tolerance=1e-8):
         """
         Calculate a new import vector from a set of demands.
         
@@ -170,20 +171,24 @@ class Country(object):
         These flows are not used in the model, but are useful
         for analysis and visualisation.
         """
-        xhat = diagonalise(self.x)        
-        return self.A.dot(xhat) # Total flows = A.xhat
+        # xhat = diagonalise(self.x)        
+        return self.A * self.x # self.A.dot(xhat)
         
     def Z_dagger(self):
         """
         Sector-to-sector flows (domestic only)
+        
+        Solves :math:`Z(I - d)`
         """
-        return self.Z().dot(self.D) 
+        return self.Z().dot(self._I - self.D)
 
     def Z_star(self):
         """
         Sector-to-sector flows (imports only)
+        
+        Solves :math:`(dZ)
         """
-        return self.Z().dot(self._I - self.D)
+        return self.Z() * self.d # 
         
     def f_dagger(self):
         """
@@ -212,8 +217,7 @@ class Country(object):
         solution where D contains elements = 1. If these are replaced
         by 0.0 within the inverse only, the import for that product will
         simply be zero. They can then be retrospectively set to the equivalent
-        total demand. This is safe because if import demand is genuinely zero,
-        then total demand must also be zero.
+        total demand.
         
         Notes
         -----
@@ -226,12 +230,12 @@ class Country(object):
             ddash = self.d
         x = domestic_requirements
         m = ddash.mul(x).div(1 - ddash)
-        m[m == 0] = total_demand # set to total_demand where 0
+        m[self.d == 1] = total_demand # set to total_demand where 0
         return m
 
     def _domestic_reqs(self,total_demand):
         """calculate the production requirements, x, using the 
-        technical coefficients matrix, A, and a given demand total
+        technical coefficients matrix, A, and a given total
         demand F, fd + ex + investments.
         Solves x = [I - (I - D)A]^-1.(I - D)F
         The inverse on the right-hand-side has no solution if D has any zero
@@ -266,6 +270,7 @@ def _change_is_significant(old, new, tolerance):
     True if any of the absolute differences in the values
     of the Series is greater than tolerance.
     """
-    return any(np.greater(np.abs(old - new), tolerance))
+    #return any(np.greater(np.abs(old - new), tolerance))
+    return any(np.greater(np.abs(old - new), 0))
 
 
