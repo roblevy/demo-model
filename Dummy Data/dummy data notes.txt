@@ -11,7 +11,7 @@ B:
 - Good at S
 - Consumes S and T
 - Exporter of S
-
+- Importer of T
 C:
 - Good at neither
 - Consumes S and T
