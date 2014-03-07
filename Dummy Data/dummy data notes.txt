@@ -4,7 +4,7 @@ A, B, C
 A:
 - Good at T
 - Consumes R and T
-- Exporter of S + T
+- Exporter of T
 - Importer of S
 
 B:
