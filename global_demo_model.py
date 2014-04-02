@@ -10,7 +10,6 @@ import numpy as np
 import country_setup
 import cPickle
 from import_propensities import calculate_import_propensities as get_P
-import copy
 
 reload(country_setup)
 
@@ -128,10 +127,9 @@ class GlobalDemoModel(object):
 
     def set_tolerance(self, tolerance):
         self.tolerance = tolerance        
-        
+    
     def recalculate_world(self, 
                           tolerance=None,
-                          calculate_deltas=False,
                           countries=None,
                           imports=None):
         """ 
@@ -157,17 +155,16 @@ class GlobalDemoModel(object):
         """
         if tolerance is None:
             tolerance = self.tolerance
-        if calculate_deltas:
-            if countries is None:
-                countries = copy.deepcopy(self.countries)
-        else:
-            countries = self.countries
+        countries = self.countries
+
         if imports is None:
             M = self.imports
         else:
             M = imports
+
         E = M * 0
         P = self._import_propensities
+
         for i in range(__MAX_ITERATIONS__):
             deficit = _export_deficit(M, E)
             if abs(deficit) < tolerance:
@@ -175,9 +172,11 @@ class GlobalDemoModel(object):
                 self.exports = E
                 print "World recalculated after %i iterations." % i
                 return True    
-            [M, E] = _iterate_model(M, E, P, countries, tolerance)
+            [M, E] = _iterate_model(M, E, P, countries)
+
         print "Warning: World didn't converge " \
               "after %i iterations." % __MAX_ITERATIONS__
+
         return False
             
     def trade_flows(self, sector, imports=None):
@@ -202,15 +201,13 @@ class GlobalDemoModel(object):
         x = [self.countries[c].x for c in country_names]
         return pd.concat(x, keys=country_names, names=['country'])
     
-    def set_final_demand(self, country_name, sector, value, 
-                         tolerance=None,
-                         calculate_deltas=False):
+    def set_final_demand(self, country, sector, value):
         """
-        Set the `sector` element of the $f$ vector in `country_name`
+        Set the `sector` element of the $f$ vector in `country`
         to `value`.
         
         This method also updates `self.imports`. It will additionally
-        recalculates the world if `recalculate` is True.
+        recalculate the world.
         
         Parameters
         ----------
@@ -220,29 +217,40 @@ class GlobalDemoModel(object):
             The name of the sector
         value : float
             The new value of the final demand
-        recalculate : bool optional
-            Recalculate the model?
+        tolerance : float optional
+            Tolerance to use when recalculating the world
         """
-        if np.abs(self.countries[country_name].f[sector] - value) >= 0:
-            if value < 0:
-                value = 0
-            if tolerance is None:
-                tolerance = self.tolerance
-            if calculate_deltas:
-                countries = copy.deepcopy(self.countries)
-            else:
-                countries = self.countries
-            country = countries[country_name]        
-            f = country.f.copy()
-            f[sector] = value
-            m = country.recalculate_economy(final_demand=f)
-            imports = _insert_import_demand_into_M( \
-                all_imports=self.imports, 
-                country_name=country_name,
-                new_imports=m)
-            self.recalculate_world(tolerance, calculate_deltas, 
-                                   countries, imports)
+        value = 0 if value < 0 else value
+            
+        if country.f[sector] != value:
+
+            country.f[sector] = value
+            self.recalculate_economy(country)
     
+    def set_technical_coefficient(self, country, 
+                                  from_sector, to_sector, value):
+        value = 0 if value < 0 else value
+        
+        technical_coefficient = country.A.ix[from_sector, to_sector]
+        if technical_coefficient != value:
+            technical_coefficient = value
+            self.recalculate_economy(country)
+    
+    
+    def recalculate_economy(self, country):
+        """
+        Recalculate the economy of `country`, insert the new
+        import demand into `self.imports` and recalculate
+        the world.
+        """
+        country_imports = country.recalculate_economy()
+        global_imports = _insert_import_demand_into_M(
+            all_imports = self.imports,
+            country_name = country.name,
+            new_imports = country_imports)
+        self.recalculate_world(countries=self.countries,
+                               imports=global_imports)
+   
     def final_demand(self):
         """
         A `pandas.Series` of final demands
@@ -502,8 +510,7 @@ def _in(data, inlist, col_name, notin=False):
     else:
         return data[data[col_name].isin(inlist)]
 
-def _iterate_model(imports, exports, import_propensities, countries,
-                   tolerance):
+def _iterate_model(imports, exports, import_propensities, countries):
     """ Calculate export requirements. Apply these requirements
     to the export demand of each country. """
     M = imports

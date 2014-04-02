@@ -6,7 +6,6 @@ Created on Wed Feb 19 19:05:01 2014
 """
 
 import pandas as pd
-import numpy as np
 import global_demo_model
 import output_model
 
@@ -23,4 +22,3 @@ goods_flows = pd.read_csv('Dummy Data/dummy_trade_flows.csv',
 #%%
 # Create model
 model = global_demo_model.GlobalDemoModel.from_data(io_data, goods_flows)
-o

@@ -84,8 +84,7 @@ class Country(object):
     def recalculate_economy(self, 
                             final_demand = None, 
                             exports = None, 
-                            investments = None,
-                            tolerance=1e-8):
+                            investments = None):
         """
         Calculate a new import vector from a set of demands.
         
@@ -130,32 +129,25 @@ class Country(object):
         if n is None:
             n = self.n
             
-        if (_change_is_significant(f, self.f, tolerance) or 
-            _change_is_significant(e, self.e, tolerance) or
-            _change_is_significant(n, self.n, tolerance)):
-            if self.name == 'RoW':
-                # See section: Calibration of 'Rest of World' entity in the paper
-                self.x = self._RoW_domestic_reqs(e)
-                m = self._RoW_import_reqs(f)
-            else:
-                self.x = self._domestic_reqs(tech_coeffs=self.A,
-                                             final_demand=f, investments=n,
-                                             exports=e, import_ratios=self.d)
-                m = self._import_reqs(tech_coeffs=self.A,
-                                      total_production=self.x,
-                                      final_demand=f,
-                                      exports=e, investments=n,
-                                      import_ratios=self.d)
+        if self.name == 'RoW':
+            # See section: Calibration of 'Rest of World' entity in the paper
+            self.x = self._RoW_domestic_reqs(e)
+            m = self._RoW_import_reqs(f)
+        else:
+            self.x = self._domestic_reqs(tech_coeffs=self.A,
+                                         final_demand=f, investments=n,
+                                         exports=e, import_ratios=self.d)
+            m = self._import_reqs(tech_coeffs=self.A,
+                                  total_production=self.x,
+                                  final_demand=f,
+                                  exports=e, investments=n,
+                                  import_ratios=self.d)
             
             # Update Country-level variables:
             self.m = m
             self.n = n
             self.e = e
             self.f = f
-        else:
-            # The change in input vectors is not deemed big enough
-            # to be worth recalculating anything
-            m = self.m
 
         return m
     
