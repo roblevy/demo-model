@@ -64,7 +64,7 @@ def create_countries_from_data(sector_flows, trade_flows):
     f = final_demand.sum(level=['country_iso3','from_sector'])
     f = rename_multiindex_level(f, 'from_sector','sector')
     # Now work out the import ratios
-    d = m / (x + m)
+    d = m / ((x - e) + m)
     
     # Get only those flows relevant for input-output. Since we no longer care about
     # domestic versus imported, we simply sum to get the totals

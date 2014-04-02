@@ -45,7 +45,7 @@ B,FALSE,t,t,f,f,f,f,T,R,0
 B,FALSE,t,t,f,f,f,f,T,S,8
 B,FALSE,t,t,f,f,f,f,T,T,20
 B,TRUE,t,f,f,f,f,t,R,EX,0
-B,TRUE,t,f,f,t,f,f,R,FD,1.65
+B,TRUE,t,f,f,t,f,f,R,FD,0.65
 B,TRUE,t,t,f,f,f,f,R,R,0.33
 B,TRUE,t,t,f,f,f,f,R,S,0
 B,TRUE,t,t,f,f,f,f,R,T,1.65

@@ -23,3 +23,4 @@ goods_flows = pd.read_csv('Dummy Data/dummy_trade_flows.csv',
 #%%
 # Create model
 model = global_demo_model.GlobalDemoModel.from_data(io_data, goods_flows)
+o

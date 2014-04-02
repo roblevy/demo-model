@@ -138,9 +138,14 @@ class Country(object):
                 self.x = self._RoW_domestic_reqs(e)
                 m = self._RoW_import_reqs(f)
             else:
-                total_demand = f + e + n
-                self.x = self._domestic_reqs(total_demand)
-                m = self._import_reqs(self.x, total_demand)
+                self.x = self._domestic_reqs(tech_coeffs=self.A,
+                                             final_demand=f, investments=n,
+                                             exports=e, import_ratios=self.d)
+                m = self._import_reqs(tech_coeffs=self.A,
+                                      total_production=self.x,
+                                      final_demand=f,
+                                      exports=e, investments=n,
+                                      import_ratios=self.d)
             
             # Update Country-level variables:
             self.m = m
@@ -206,40 +211,46 @@ class Country(object):
         """
         return self.D.dot(self.f)
                  
-    def _import_reqs(self, domestic_requirements, total_demand):
+    def _import_reqs(self, tech_coeffs, 
+                     total_production, final_demand, exports,
+                     investments, import_ratios):
         """
         Given domestic requirements, total demand and the import ratios, 
         calculate import demand.
         
-        Calculates :math:`m = (I - D)^-1 Dx`
+        Calculates :math:`m = (I - \hat{d})^{-1} \hat{d}(x-e)`
         where D is the diagonal matrix of import ratios.
-        The inverse in the first part of the right-hand-side has no
-        solution where D contains elements = 1. If these are replaced
-        by 0.0 within the inverse only, the import for that product will
-        simply be zero. They can then be retrospectively set to the equivalent
-        total demand.
+        The exception to this is if any of the elements of :math:`\hat{d}`
+        are 1. In these cases :math:`m_s=A_{s,:}x_s + f_s + n_s`.
         
         Notes
         -----
         The matrix algebra calculation has been replaced with a simple
         pandas element-wise binary operation.
         """
-        if 1 in self.d.values:
-            ddash = self.d.replace(1,0.0)
+        d = import_ratios
+        if 1 in d.values:
+            ddash = d.replace(1,0.0)
         else:
-            ddash = self.d
-        x = domestic_requirements
-        m = ddash.mul(x).div(1 - ddash)
-        m[self.d == 1] = total_demand # set to total_demand where 0
+            ddash = d
+        A = tech_coeffs
+        x = total_production
+        f = final_demand
+        e = exports
+        n = investments
+        # m = (d / (1 - d)) * (x - e)
+        m = ddash.mul(x - e).div(1 - ddash)
+        # set to Ax + f + n where where d = 1
+        m[d == 1] = A.ix[d == 1].dot(x) + f[d == 1] + n[d == 1]
         return m
 
-    def _domestic_reqs(self,total_demand):
+    def _domestic_reqs(self, tech_coeffs, final_demand, 
+                       investments, exports, import_ratios):
         """calculate the production requirements, x, using the 
         technical coefficients matrix, A, and a given total
         demand F, fd + ex + investments.
-        Solves x = [I - (I - D)A]^-1.(I - D)F
-        The inverse on the right-hand-side has no solution if D has any zero
-        elements.
+        Solves :math:`(I - (I - \hat{d})A)x=(I - \hat{d})(f + n) + e`
+        setting :math:`x_s=e_s` where :math:`d_s=0`.
         
         Notes
         -----
@@ -248,10 +259,13 @@ class Country(object):
         is easy in pandas.
         """
         I = self._I
-        A = self.A
-        F = total_demand
-        d = self.d
-        x = np.linalg.solve(I - A.mul(1 - d, 'index'),F.mul(1 - d, 'index'))
+        A = tech_coeffs
+        f = final_demand
+        n = investments
+        e = exports
+        d = import_ratios
+        x = np.linalg.solve(I - A.mul(1 - d, 'index'),
+                            (f + n).mul(1 - d, 'index') + e)
     
         return x
                 
