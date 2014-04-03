@@ -4,78 +4,191 @@ Created on Thu Jun 20 11:15:29 2013
 
 @author: Rob
 """
-
-from os import chdir, path
-chdir(path.dirname(__file__))
-
 import numpy as np
 import pandas as pd
 import global_demo_model
 import output_model
+import unittest
 
 reload(global_demo_model)
 reload(output_model)
 
+class DemoModelInternals(unittest.TestCase):
+    def setUp(self):
+        # Get data (either dummy or 'real')
+        # DUMMY
+        # -----
+        self.tolerance = 1e-8
+        self.test_country_name = 'A'
+        self.second_test_country_name = 'B'
+        self.test_sector = 'T'
+        self.second_test_sector = 'R'
+        io_data = pd.read_csv('Dummy Data/dummy_io_flows.csv',
+                              true_values='t',false_values='f')
+        goods_flows = pd.read_csv('Dummy Data/dummy_trade_flows.csv',
+                                  true_values='t',false_values='f')
+                                
+        # Create model
+        self.model = global_demo_model. \
+            GlobalDemoModel.from_data(sector_flows=io_data, 
+                                      commodity_flows=goods_flows,
+                                      silent=True, tolerance=self.tolerance)
 
-# Get data (either dummy or 'real')
-sector_flows = pd.read_csv('../Data/40 Countries/2008/sector_flows.csv',true_values='t',false_values='f')
-trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',true_values='t',false_values='f')
-services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
+        # REAL
+        # ----
+#        self.tolerance = 1e-2
+#        self.test_country_name = 'GBR'
+#        self.second_test_country_name = 'USA'
+#        self.test_sector = 'Wood'
+#        self.second_test_sector = 'Business Services'
+#        sector_flows = pd.read_csv('../Data/40 Countries/2008/sector_flows.csv',true_values='t',false_values='f')
+#        trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',true_values='t',false_values='f')
+#        services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
+#        self.model = global_demo_model. \
+#            GlobalDemoModel.from_data(sector_flows,
+#                                      trade_flows,
+#                                      services_flows, 
+#                                      silent=True, tolerance=self.tolerance)
 
-# Create model
-#countries = ['USA','GBR','IND']
-#countries = pd.unique(sector_flows.country_iso3).tolist()
-#sector_flows = sector_flows[sector_flows['country_iso3'].isin(countries)]
-model = global_demo_model.GlobalDemoModel.from_data(sector_flows,
-                                                    trade_flows,
-                                                    services_flows)
+        # country object
+        self.test_country_1 = self.model.countries[self.test_country_name]
+        self.B = self.model.countries[self.second_test_country_name]
+        self.f = self.test_country_1.f.copy()
+        self.e = self.test_country_1.e.copy()
+        self.m = self.test_country_1.m.copy()
+        self.x = self.test_country_1.x.copy()
+        
+    def test_m_and_x_same_if_f_and_e_are_same(self):        
+        # Make sure that feeding existing f and e into
+        # recalculate_economy does nothing
+        A = self.test_country_1
+        f = self.f
+        e = self.e
+        m = self.m
+        x = self.x
+        
+        A.recalculate_economy(final_demand=f,
+                              exports=e) # nothing should happen
+        # Check m doesn't change
+        self.assertTrue(np.allclose(m, A.m, rtol=self.tolerance))
+        # Check x doesn't change
+        self.assertTrue(np.allclose(x, A.x, rtol=self.tolerance))
 
-#%%
-# Test country object
-gbr = model.countries['GBR']
-m = gbr.m.copy()
-x = gbr.x.copy()
-f = gbr.f.copy()
-e = gbr.e.copy()
-gbr.recalculate_economy(final_demand=f,
-                        exports=e) # nothing should happen
-print "Test no change when existing f and e are used:"
-print np.allclose(m, gbr.m,rtol=model.tolerance) & \
-    np.allclose(x, gbr.x,rtol=1e-8)
-f = f.copy()
-f["Agriculture"] = f["Agriculture"] + 100000
-gbr.recalculate_economy(final_demand=f,
-                        exports=e)
-print "Test that when f and e are changed, both x and m change"
-print ~(np.allclose(m,gbr.m,rtol=1e-8)) & \
-    ~(np.allclose(x,gbr.x,rtol=1e-8))
-print "Test that when f and e are changed, x + m = Ax + f + e"
-print np.allclose(gbr.x + gbr.m, np.dot(gbr.A, gbr.x) + \
-    gbr.f + gbr.e,rtol=1e-8)
+    def test_recalculate_world_does_nothing_on_its_own(self):
+        E = self.model.exports.copy()
+        M = self.model.imports.copy()        
+        self.model.recalculate_world()
+        # Exports should be unchanged
+        self.assertTrue(np.allclose(E, self.model.exports))
+        # Exports should be unchanged
+        self.assertTrue(np.allclose(M, self.model.imports))
 
-# Run the model
-model.set_tolerance(1e-2)
-model.recalculate_world()
-print "Test that imports = exports after recalculating world:"
-print np.allclose(model.exports.sum(1), model.imports.sum(1),rtol=model.tolerance)
+    def test_m_and_x_increase_when_f_increases(self):
+        A = self.test_country_1
+        m = self.m
+        x = self.x
 
-print "Test that increasing one country/sector's final demand " \
-    "increases all sector's output for whole world."
-gbrx = gbr.x
-indx = model.countries['IND'].x
-f_air_transport = gbr.f['Air Transport'] * 2
-model.set_final_demand(gbr,'Air Transport', f_air_transport)
-print np.alltrue(gbr.x > gbrx) and \
-    np.alltrue(model.countries['IND'].x > indx)
+        f_R = A.f[self.test_sector]
+        
+        # Both m and x should change when final demand changes
+        self.model.set_final_demand(A, self.test_sector, f_R + 1000)
+        # Check m increases
+        self.assertTrue(np.alltrue(np.greater(A.m, m)))
+        # Check x increases
+        self.assertTrue(np.alltrue(np.greater(A.x, x)))
+        
+    def test_global_m_and_x_increase_when_f_increases(self):
+        A = self.test_country_1
+        B = self.B
+        m = B.m.copy()
+        x = B.x.copy()
 
-print "Test that decreasing one country/sector's final demand " \
-    "decreases all sector's output for whole world."
-gbrx = gbr.x
-usax = model.countries['USA'].x
-usai = model.countries['USA'].m
-model.set_final_demand('GBR','Agriculture',
-                       gbr.f['Agriculture'] / 2)
-print np.alltrue(gbr.x < gbrx) and np.alltrue(model.countries['USA'].x < usax)
-print np.alltrue(model.countries['USA'].m < usai)
+        fA_R = A.f[self.test_sector]
+        
+        # Both m and x should change when final demand changes
+        self.model.set_final_demand(A, self.test_sector, fA_R + 1000)
+        # Check m increases
+        self.assertTrue(np.alltrue(np.greater(B.m, m)))
+        # Check x increases
+        self.assertTrue(np.alltrue(np.greater(B.x, x)))
+    
+    def test_global_m_and_x_decrease_when_f_decreases(self):
+        A = self.test_country_1
+        B = self.B
+        m = B.m.copy()
+        x = B.x.copy()
 
-model.to_file('model.gdm')
+        fA_R = A.f[self.test_sector]
+        
+        # Both m and x should change when final demand changes
+        self.model.set_final_demand(A, self.test_sector, fA_R - 1000)
+        # Check m increases
+        self.assertTrue(np.alltrue(np.less(B.m, m)))
+        # Check x increases
+        self.assertTrue(np.alltrue(np.less(B.x, x)))            
+    
+    def test_supply_equals_demand(self):
+        # When f and e are changed, check x + m = Ax + f + e
+        A = self.test_country_1
+        self.model.set_final_demand(A, self.test_sector, 
+                                    A.f[self.test_sector] * 2)
+        supply = A.x + A.m
+        demand = np.dot(A.A, A.x) + A.f + A.e
+        self.assertTrue(np.allclose(supply, demand))
+
+    def test_imports_equal_exports_after_recalculating_world(self):
+        model = self.model
+        model.recalculate_world()
+        self.assertTrue(np.allclose(model.exports.sum(level=0), 
+                                    model.imports.sum(level=0)))
+
+    def test_set_final_demand(self):
+        model = self.model
+        A = self.test_country_1
+        model.set_final_demand(A, self.test_sector, 1234)
+        self.assertTrue(A.f[self.test_sector] == 1234)
+
+    def test_set_final_demand_changes_imports(self):
+        model = self.model
+        A = self.test_country_1
+        M = model.imports.copy()
+        model.set_final_demand(A, self.test_sector, 1234)
+        self.assertTrue((model.imports != M).any)
+
+    def test_set_tech_coeff_successfully(self):
+        model = self.model
+        country = self.test_country_1
+        r = self.test_sector
+        s = self.second_test_sector
+        A = country.A
+        a = A.ix[s, r]
+        new_a = a / 2 if a > 0 else 0.001234
+        model.set_technical_coefficient(country, s, r, new_a)
+        self.assertTrue(country.A.ix[s, r] == new_a)
+
+    def test_set_tech_coeff_too_much(self):
+        model = self.model
+        country = self.test_country_1
+        r = self.test_sector
+        s = self.second_test_sector
+        A = country.A
+        a = A.ix[s, r]
+        model.set_technical_coefficient(country, s, r, 1.1)
+        self.assertTrue(country.A.ix[s, r] == a)
+
+    def test_set_tech_coeff_changes_import(self):
+        model = self.model
+        country = self.test_country_1
+        r = self.test_sector
+        s = self.second_test_sector
+        A = country.A
+        m = country.m.copy()
+        a = A.ix[s, r]
+        new_a = a / 2 if a > 0 else 0.001234
+        model.set_technical_coefficient(country, s, r, new_a)
+        self.assertTrue((country.m != m).any)
+      
+
+if __name__ == '__main__':
+    unittest.main(exit=False)
+

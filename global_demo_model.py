@@ -35,7 +35,9 @@ class GlobalDemoModel(object):
                  imports, 
                  exports, 
                  import_propensities,
-                 calculate=False):
+                 calculate=False,
+                 silent=False,
+                 tolerance=__DEFICIT_TOLERANCE__):
         """
         Parameters
         ----------
@@ -63,7 +65,8 @@ class GlobalDemoModel(object):
             unique values from the country_iso3 column of sector_flows.
 
         """
-        self.tolerance = __DEFICIT_TOLERANCE__
+        self.tolerance = tolerance
+        self._silent = silent
         self.countries = countries
         self.sectors = sectors
         self.country_names = countries.keys()
@@ -86,7 +89,8 @@ class GlobalDemoModel(object):
 
     @classmethod
     def from_data(cls, sector_flows, commodity_flows, 
-                  services_flows=None):
+                  services_flows=None, silent=False,
+                  tolerance=__DEFICIT_TOLERANCE__):
         """
         Create a demo model from data
         
@@ -102,7 +106,8 @@ class GlobalDemoModel(object):
             Services sector flow values per from/to country, per
             sector, per year. These will usually have been produced
             via a balancing procedure from import/export totals.
-            
+        silent : boolean optional
+            The model shouldn't report any statuses to the console
         Returns
         -------
         GlobalDemoModel
@@ -122,16 +127,19 @@ class GlobalDemoModel(object):
                                                             stray_imports, 
                                                             sectors)
         # Initialise M, E and P
-        (M, E, P) = _initialise(relevant_flows, countries, sectors)
-        return cls(countries, sectors, M, E, P, calculate=True)
+        (M, E, P) = _initialise(relevant_flows, countries, sectors, 
+                                silent=silent)
+        model = cls(countries, sectors, M, E, P, 
+                    calculate=True, silent=silent, tolerance=tolerance)
+        model._silent = silent
+        return model
 
     def set_tolerance(self, tolerance):
         self.tolerance = tolerance        
     
     def recalculate_world(self, 
                           tolerance=None,
-                          countries=None,
-                          imports=None):
+                          countries=None):
         """ 
         Iterate between setting import demands and export demands until
         trade in all sectors balances.
@@ -156,26 +164,29 @@ class GlobalDemoModel(object):
         if tolerance is None:
             tolerance = self.tolerance
         countries = self.countries
-
-        if imports is None:
-            M = self.imports
-        else:
-            M = imports
-
-        E = M * 0
         P = self._import_propensities
 
+        E = self.exports * 0 # Set exports to zero
+
         for i in range(__MAX_ITERATIONS__):
+            # Get imports from exports and an understanding of the
+            # internal country structure. (E is zero first time round)
+            M = _world_import_requirements(countries, E)
+            # Calculate global import/export deficit
             deficit = _export_deficit(M, E)
+            # Now get exports given import demands and import propensities
+            E = _world_export_requirements(M, P)
             if abs(deficit) < tolerance:
+                # stop iterating!
                 self.imports = M
                 self.exports = E
-                print "World recalculated after %i iterations." % i
+                if not self._silent:
+                    print "World recalculated after %i iterations." % i
                 return True    
-            [M, E] = _iterate_model(M, E, P, countries)
 
-        print "Warning: World didn't converge " \
-              "after %i iterations." % __MAX_ITERATIONS__
+        if not self._silent:
+            print "Warning: World didn't converge " \
+                  "after %i iterations." % __MAX_ITERATIONS__
 
         return False
             
@@ -225,31 +236,28 @@ class GlobalDemoModel(object):
         if country.f[sector] != value:
 
             country.f[sector] = value
-            self.recalculate_economy(country)
+            self.recalculate_world()
     
     def set_technical_coefficient(self, country, 
                                   from_sector, to_sector, value):
+        """
+        Sets `a_rs` to `value` as long as the sum of column `s`
+        would be less than one. Otherwise, does nothing.
+        """
         value = 0 if value < 0 else value
         
+        column_sum = country.A[to_sector].sum()
         technical_coefficient = country.A.ix[from_sector, to_sector]
         if technical_coefficient != value:
-            technical_coefficient = value
-            self.recalculate_economy(country)
-    
-    
-    def recalculate_economy(self, country):
-        """
-        Recalculate the economy of `country`, insert the new
-        import demand into `self.imports` and recalculate
-        the world.
-        """
-        country_imports = country.recalculate_economy()
-        global_imports = _insert_import_demand_into_M(
-            all_imports = self.imports,
-            country_name = country.name,
-            new_imports = country_imports)
-        self.recalculate_world(countries=self.countries,
-                               imports=global_imports)
+            if column_sum - technical_coefficient + value < 1:
+                country.A.ix[from_sector, to_sector] = value
+                self.recalculate_world()
+   
+    def set_import_ratio(self, country, sector, value):
+        print "not implemented yet"
+        
+    def set_import_propensity(self, sector, from_country, to_country, value):
+        print "not implemented yet"
    
     def final_demand(self):
         """
@@ -493,7 +501,7 @@ class GlobalDemoModel(object):
         else:
             return {"country":None, "sector":None}   
             
-def _initialise(data, countries, sectors):
+def _initialise(data, countries, sectors, silent=False):
     """ 
     Perform step 0, initialisation, of the algorithm in the
     paper
@@ -501,7 +509,8 @@ def _initialise(data, countries, sectors):
     M = _create_M(data, countries, sectors)
     E = _create_E(M)
     P = get_P(data, M, countries, sectors)
-    print "Initialisation complete"
+    if not silent:
+        print "Initialisation complete"
     return M, E, P
 
 def _in(data, inlist, col_name, notin=False):
@@ -510,16 +519,6 @@ def _in(data, inlist, col_name, notin=False):
     else:
         return data[data[col_name].isin(inlist)]
 
-def _iterate_model(imports, exports, import_propensities, countries):
-    """ Calculate export requirements. Apply these requirements
-    to the export demand of each country. """
-    M = imports
-    E = exports
-    P = import_propensities
-    
-    E = _world_export_requirements(M, P)
-    M = _world_import_requirements(countries, E)
-    return M, E
         
 def _create_M(data, countries, sectors):
     # Construct a blank dataframe to house the import values        
@@ -561,15 +560,15 @@ def _create_E(imports):
 
 def _export_deficit(imports, exports):
     """
-    Sum over sectors of M - sum of sectors of E, take the square
-    and sum the squares
+    Sum over sectors of M - sum of sectors of E, take the absolute value
+    and sum.
     """
     M = imports
     E = exports
     world_imports = M.sum(level='sector')
     world_exports = E.sum(level='sector')
     
-    return sum(pow(world_imports - world_exports, 2))
+    return sum(np.abs(world_imports - world_exports))
 
 def _get_sector_names(flow_data):
     data = flow_data
