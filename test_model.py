@@ -53,6 +53,8 @@ class DemoModelInternals(unittest.TestCase):
 #            GlobalDemoModel.from_pickle('model.gdm', silent=True)
         # country object
         self.test_country_1 = self.model.countries[self.test_country_name]
+        self.test_country_2 = self.model. \
+            countries[self.second_test_country_name]
         self.B = self.model.countries[self.second_test_country_name]
         self.f = self.test_country_1.f.copy()
         self.e = self.test_country_1.e.copy()
@@ -209,7 +211,6 @@ class DemoModelInternals(unittest.TestCase):
         model.set_technical_coefficient(country, s, r, new_a)
         self.assertTrue((country.m != m).any)
       
-
 if __name__ == '__main__':
     unittest.main(exit=False)
 

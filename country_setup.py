@@ -83,31 +83,34 @@ def create_countries_from_data(sector_flows, trade_flows):
     country_objects = {}
     for country in countries:
         country_objects[country] = c.Country(country, 
-            final_demand=f.ix[country], 
-            export_demand=e.ix[country],
-            import_demand=m.ix[country],
+            final_demand=f.ix[country],
             # Create a matrix from long-format data
             technical_coefficients=A.ix[country].unstack(1), 
             import_ratios=d.ix[country])
     return country_objects
 
 def create_RoW_country(stray_exports, stray_imports, sectors):
-    """ This follows the procedure outlined in the section
-    "Calibration of a 'Rest of World' Entity" in the demo
-    model paper. In brief, imports to RoW are all those
-    flows not going to a country in countries. Similar with exports.
+    """ 
+    Create a Rest of World country according to special rules.
+    
+    Imports to RoW are all those
+    flows not going to a country in `countries`.
     Import propensities are then calculated as normal. Final Demand
-    is set to be identical to imports. Investments are 0."""
+    is set to be identical to imports. Investments are 0.
+    
+    Since production will later be set to be identical to exports,
+    the RoW will simply produce whatever is needed for export, and 
+    consume only that which is imported.    
+    """
     # Initialise the pd.Series which will store the i and e values
     # This is necessary to ensure ALL sectors have an entry    
-    df = pd.DataFrame({'sector':sectors,'trade_value':0}).set_index('sector').squeeze()
+    df = pd.DataFrame({'sector':sectors,'trade_value':0}) \
+        .set_index('sector').squeeze()
     i = stray_exports.groupby('sector').aggregate(sum)['trade_value']
-    e = stray_imports.groupby('sector').aggregate(sum)['trade_value']
-    RoW_imports = df.add(i,fill_value=0)
-    RoW_exports = df.add(e,fill_value=0)
+    # Since COMTRADE numbers are in $s and WIOD numbers are in 
+    # $1,000,000s we need to divide first
+    RoW_imports = df.add(i,fill_value=0) / 1e6
     return c.Country('RoW',final_demand=RoW_imports,
-                     export_demand=RoW_exports,
-                     import_demand=RoW_imports,
                      technical_coefficients=0,
                      import_ratios=0)
   

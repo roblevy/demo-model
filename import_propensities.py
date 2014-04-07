@@ -5,6 +5,7 @@ Created on Tue Jul 02 14:02:49 2013
 @author: Rob
 """
 import pandas as pd
+from itertools import product
 
 def calculate_import_propensities(trade_data, import_totals, countries, sectors):
     """ Calculate import propensities by the following algorithm:
@@ -15,36 +16,29 @@ def calculate_import_propensities(trade_data, import_totals, countries, sectors)
     cannot be calculated in this way. We therefore set all import propensities
     to zero apart from that associated with RoW
     """
-    P = {}
     t = trade_data
-    # Calculate each individual import propensity
-    t = t.merge(pd.DataFrame(import_totals),
-                left_on=['sector','to_iso3'],
-                right_index=True)
-    t['p_j'] = t.trade_value / t.i
-#    # 'Unstack' the table. This creates a matrix with from_iso3 down the left
-#    # and to_iso3 along the top
-    t = t.set_index(['sector','from_iso3','to_iso3'])
-    t = t.sum(level=[0,1,2]) # This sums over all duplicate from/to entries
-    p_matrices = t['p_j'].unstack(2)
-#    
-    # Now create the P matrices    
-    for sector in sectors:  
-        P_i = pd.DataFrame(0,index=sorted(countries.keys()),
-                           columns=sorted(countries.keys()))
-        try:
-            P_i = P_i.add(p_matrices.ix[sector],fill_value=0)
-        except:
-            pass
-        # Any columns which don't sum to unity, get the remainder
-        # Coming from the RoW
-        col_sums = P_i.sum(0)
-        P_i.ix['RoW'][col_sums < 1] = \
-            P_i.ix['RoW'][col_sums < 1] + (1 - col_sums)
-        P_i.columns.name = 'to_iso3'
-        P_i.index.name = 'from_iso3'
-        P[sector] = P_i
-    return P
+    # Calculate each import propensity, p
+    t = t.set_index(['sector','from_iso3','to_iso3']).sortlevel()
+    import_totals = t.groupby(level=['sector', 'to_iso3']).transform(sum)
+    p = t / import_totals
+    p = p.sum(level=[0,1,2]) # This sums over all duplicate from/to entries
+    sectors = sorted(sectors)
+    country_names = sorted(countries.keys())
+    P = pd.DataFrame(list(product(sectors, country_names, country_names)),
+                     columns=['sector', 'from_country', 'to_country'])
+    P = P.set_index(['sector', 'from_country', 'to_country'])
+    P['p'] = p
+    P = P.p.fillna(0).squeeze()
+     
+    # any sector, to_country which doesn't sum to unity,
+    # gets the remainder from RoW
+    P = P.unstack(level='to_country')
+    for s in P.index.levels[0]:
+        P_s = P.ix[s]
+        col_sums = P_s.sum(0)
+        P.ix[s, 'RoW'][col_sums < 1] = \
+            P_s.ix['RoW'][col_sums < 1] + (1 - col_sums)
+    return P.stack()
 
         
 def _data_contains_sector(data, sector):

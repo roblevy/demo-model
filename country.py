@@ -13,7 +13,7 @@ class Country(object):
     a country in the global demo model.
     
     """
-    def __init__(self, name, final_demand, export_demand, import_demand,
+    def __init__(self, name, final_demand,
                  technical_coefficients, 
                  import_ratios):
         """
@@ -59,11 +59,10 @@ class Country(object):
         """
         self.name = name
         self.f = final_demand
-        self.e = export_demand
-        self.m = import_demand
-        self.n = export_demand * 0
+        self.n = final_demand * 0
+        self.e = final_demand * 0
         self.flow_deltas = technical_coefficients * 0
-        self.stock_deltas = export_demand * 0
+        self.stock_deltas = final_demand * 0
         
         if name != 'RoW':
             self.A = technical_coefficients

@@ -578,7 +578,7 @@ def _country_import_demand(country,
 def _create_E(imports):
     M = imports    
     E = M * 0
-    E.index.names[1] = 'from_iso3'
+    E.index = E.index.rename(['sector', 'from_iso3'])
     return E
 
 def _export_deficit(imports, exports):
@@ -605,7 +605,7 @@ def _world_export_requirements(imports, import_propensities):
     all countries."""
     M = imports
     P = import_propensities
-    sectors = sorted(P.keys())
+    sectors = sorted(P.index.levels[0])
 
     all_E = map(_sector_export_requirements,
                 sectors, 
@@ -620,7 +620,7 @@ def _sector_export_requirements(sector, sector_imports,
                                 sector_import_propensities):
     i_s = sector_imports
     P_s = sector_import_propensities
-    e_s = P_s.dot(i_s)
+    e_s = P_s.unstack().dot(i_s)
     e_s.index.names = ['from_iso3']
     return e_s.squeeze()
     

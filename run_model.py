@@ -14,6 +14,6 @@ model = global_demo_model. \
     GlobalDemoModel.from_data(sector_flows,
                               trade_flows,
                               services_flows, 
-                              silent=False, tolerance=0.01)
+                              silent=False, tolerance=1)
                               
 model.to_file('model.gdm')
