@@ -19,21 +19,21 @@ __DEFICIT_TOLERANCE__ = 1
 class GlobalDemoModel(object):
     """
     The Python implementation of an ENFOLDing global demonstration model.
-    
+
     The ENFOLDing global demonstration model is a collection of country-level
     input-output models and a set of linear parameters for connecting them
     together into an international trade network.
     Typically the model is set up once from data, then recalculated once
-    certain parts of the model have been tweaked by calling 
+    certain parts of the model have been tweaked by calling
     `recalculate_world`. The initial creation of the
-    object performs the first (re)calculation of the model.   
+    object performs the first (re)calculation of the model.
     """
-    
-    def __init__(self, 
-                 countries, 
-                 sectors, 
-                 imports, 
-                 exports, 
+
+    def __init__(self,
+                 countries,
+                 sectors,
+                 imports,
+                 exports,
                  import_propensities,
                  calculate=True,
                  silent=False,
@@ -54,11 +54,11 @@ class GlobalDemoModel(object):
             a pandas.DataFrame with an index of country names and the columns
             being the same country names. Each entry is the propensity of the
             column country to import from the row (index) country.
-            
+
         Attributes
         ----------
         c : dict
-            A dictionary of Country objects keyed on the country's ISO 3 
+            A dictionary of Country objects keyed on the country's ISO 3
             code, e.g. Great Britain's ISO 3 code is GBR.
         countries : list
             A list of all the country ISO 3 codes. This is created by getting
@@ -79,8 +79,8 @@ class GlobalDemoModel(object):
         self.deltas = pd.DataFrame()
         # Perform the first calculation of the model
         self.recalculate_world()
-    
-    @classmethod    
+
+    @classmethod
     def from_pickle(cls, picklefilename, silent=None):
         model = cPickle.load(open(picklefilename,'r'))
         silent = model['silent'] if silent is None else silent
@@ -94,12 +94,12 @@ class GlobalDemoModel(object):
                    tolerance=model['tolerance'])
 
     @classmethod
-    def from_data(cls, sector_flows, commodity_flows, 
+    def from_data(cls, sector_flows, commodity_flows,
                   services_flows=None, silent=False,
                   tolerance=__DEFICIT_TOLERANCE__):
         """
         Create a demo model from data
-        
+
         Parameters
         ----------
         sector_flows : pandas.DataFrame
@@ -117,51 +117,50 @@ class GlobalDemoModel(object):
         Returns
         -------
         GlobalDemoModel
-        """              
-        countries = country_setup.create_countries_from_data(sector_flows, 
+        """
+        countries = country_setup.create_countries_from_data(sector_flows,
                                                              commodity_flows)
         country_names = pd.unique(sector_flows['country_iso3']).tolist()
         sectors = _get_sector_names(sector_flows)
         if services_flows is None:
             services_flows = pd.DataFrame()
         trade_flows = pd.concat([services_flows, commodity_flows])
-        [stray_exports, 
-         stray_imports, 
+        [stray_exports,
+         stray_imports,
          relevant_flows] = _relevant_flows(trade_flows,countries)
         country_names.append('RoW')
-        countries['RoW'] = country_setup.create_RoW_country(stray_exports, 
-                                                            stray_imports, 
+        countries['RoW'] = country_setup.create_RoW_country(stray_exports,
+                                                            stray_imports,
                                                             sectors)
         # Initialise M, E and P
-        (M, E, P) = _initialise(relevant_flows, countries, sectors, 
+        (M, E, P) = _initialise(relevant_flows, countries, sectors,
                                 silent=silent)
-        model = cls(countries, sectors, M, E, P, 
+        model = cls(countries, sectors, M, E, P,
                     calculate=True, silent=silent, tolerance=tolerance)
-        model._silent = silent
         return model
 
     def set_tolerance(self, tolerance):
-        self.tolerance = tolerance        
-    
-    def recalculate_world(self, 
+        self.tolerance = tolerance
+
+    def recalculate_world(self,
                           tolerance=None,
                           countries=None):
-        """ 
+        """
         Iterate between setting import demands and export demands until
         trade in all sectors balances.
-        
+
         Runs the iterative process to calculate each country's import
         requirements, use the import propensities to calculate export requirements
         per sector-country, and apply these export requirements to each country's
         input-output model. This process is repeated at most __MAX_ITERATIONS__ times,
         or until the global trade deficit < self.tolerance
-        
-        Parameters        
+
+        Parameters
         ----------
         tolerance : float, optional
             the value of the export deficit below which iteration
             stops
-        
+
         Returns
         -------
         bool
@@ -173,9 +172,9 @@ class GlobalDemoModel(object):
                 tolerance = self.tolerance
             countries = self.countries
             P = self._import_propensities
-    
+
             E = self.exports * 0 # Set exports to zero
-    
+
             for i in range(__MAX_ITERATIONS__):
                 # Get imports from exports and an understanding of the
                 # internal country structure. (E is zero first time round)
@@ -191,20 +190,20 @@ class GlobalDemoModel(object):
                     _put_exports_into_countries(countries, E)
                     if not self._silent:
                         print "World recalculated after %i iterations." % i
-                    return True    
-    
+                    return True
+
             if not self._silent:
                 print "Warning: World didn't converge " \
                       "after %i iterations." % __MAX_ITERATIONS__
-    
+
             return False
         else:
             return False
-            
+
     def sector_trade_flows(self, sector, imports=None):
         """
         From-country to-country flows for the given sector.
-        
+
         Calculated on the fly as :math:`PM`, where :math:`P` is the propensity
         matrix for the given sector, and :math:`M` is the import demand vector
         for the given sector.
@@ -214,23 +213,55 @@ class GlobalDemoModel(object):
         m = imports.ix[sector]
         P = self._import_propensities[sector]
         return P * m
-    
+
     def total_production(self):
         """
         total production,x, for all countries (except RoW) in all sectors
         """
-        country_names = sorted([c for c in self.country_names if c != 'RoW'])
-        x = [self.countries[c].x for c in country_names]
-        return pd.concat(x, keys=country_names, names=['country'])
+        x = [self.countries[c].x for c in self._countries_not_RoW()]
+        return pd.concat(x, keys=self._countries_not_RoW(), 
+                         names=['country'])
+
+    def technical_coefficients(self):
+        """
+        Technical coefficients for all countries except RoW
+        """
+        A = [self.countries[c].A.unstack() \
+                for c in self._countries_not_RoW()]
+        return pd.concat(A, keys=self._countries_not_RoW(), 
+                         names=['country'])
+
+    def import_ratios(self):
+        """
+        get import ratios from each country in the model
+
+        
+        Parameters
+        ----------
+        as_matrix : boolean
+            Return diagonalised D matrices, or simple d vectors?
+
+        Returns
+        -------
+        pd.Series
+        """
+        d = [self.countries[c].d \
+                for c in self._countries_not_RoW()]
+        return pd.concat(d, keys=self._countries_not_RoW(), 
+                         names=['country'])
+
+    def _countries_not_RoW(self):
+        return sorted([c for c in self.country_names \
+            if c != 'RoW'])
     
     def set_final_demand(self, country, sector, value):
         """
         Set the `sector` element of the $f$ vector in `country`
         to `value`.
-        
+
         This method also updates `self.imports`. It will additionally
         recalculate the world.
-        
+
         Parameters
         ----------
         country_name : str
@@ -243,43 +274,43 @@ class GlobalDemoModel(object):
             Tolerance to use when recalculating the world
         """
         value = 0 if value < 0 else value
-            
+
         if country.f[sector] != value:
 
             country.f[sector] = value
             self.recalculate_world()
-    
-    def set_technical_coefficient(self, country, 
+
+    def set_technical_coefficient(self, country,
                                   from_sector, to_sector, value):
         """
         Sets `a_rs` to `value` as long as the sum of column `s`
         would be less than one. Otherwise, does nothing.
         """
         value = 0 if value < 0 else value
-        
+
         column_sum = country.A[to_sector].sum()
         technical_coefficient = country.A.ix[from_sector, to_sector]
         if technical_coefficient != value:
             if column_sum - technical_coefficient + value < 1:
                 country.A.ix[from_sector, to_sector] = value
                 self.recalculate_world()
-   
+
     def set_import_ratio(self, country, sector, value):
-        print "not implemented yet" # TODO: 
-        
+        print "not implemented yet" # TODO:
+
     def set_import_propensity(self, sector, from_country, to_country, value):
-        print "not implemented yet" # TODO: 
-   
+        print "not implemented yet" # TODO:
+
     def final_demand(self):
         """
         A `pandas.Series` of final demands
-        
+
         The Series is indexed on country_name/sector
-        
+
         Returns:
         --------
          : pandas.Series
-        """        
+        """
         df = pd.DataFrame()
         for name, country in self.countries.iteritems():
             fd = country.f.reset_index(name='final_demand')
@@ -288,51 +319,15 @@ class GlobalDemoModel(object):
         df = df.set_index(['country_iso3','sector']).squeeze()
         df.name = 'final_demand'
         return df
-        
+
     def import_propensities(self):
         return self._import_propensities
-        
-    def technical_coefficients(self):
-        A = {}
-        for name, c in self.countries.iteritems():
-            if name != 'RoW':
-                A[name] = c.A
-        return pd.Panel.from_dict(A)
 
-    def import_ratios(self, as_matrix=False):
-        """
-        get import ratios from each country in the model
-        
-        If as_matrix = False, returns a pd.DataFrame of import ratios, 
-        with countries as columns, and sectors as the index (rows)
-        Otherwise returns a pd.Panel, keyed on country name, where each
-        element is a DataFrame with a diagonalised imjport propensity matrix.
-        
-        Parameters
-        ----------
-        as_matrix : boolean
-            Return diagonalised D matrices, or simple d vectors?
-            
-        Returns
-        -------
-        pd.Generic
-        """
-        D = {}
-        for name, c in self.countries.iteritems():
-            if name != 'RoW':
-                if as_matrix:
-                    D[name] = c.D
-                else:
-                    D[name] = c.d
-        if as_matrix:
-            return pd.Panel.from_dict(D)
-        else:
-            return pd.DataFrame.from_dict(D)
 
     def gross_output(self, with_RoW = False):
         """
         The gross output of each country in the model
-        
+
         Returns
         -------
         pandas.Series
@@ -347,7 +342,7 @@ class GlobalDemoModel(object):
             c = self.countries[c_name]
             g_out.ix[c_name] = c.gross_output()
         return g_out.sort_index()
-    
+
     def to_file(self, filename):
         """
         Create a pickle of the currentdemo model
@@ -360,16 +355,16 @@ class GlobalDemoModel(object):
                  'silent': self._silent,
                  'calculate': self._calculate,
                  'tolerance': self.tolerance}
-        cPickle.dump(model, 
+        cPickle.dump(model,
                      open(filename,'wb'))
 #                     protocol=cPickle.HIGHEST_PROTOCOL)
-    
+
     def adjacency_matrix(self):
         """
         A single, unified adjancency matrix of all flows
-        
+
         This uses the fact that country/sector-country-sector
-        flow :math:`y_{r,s}^{(i,j)}` can be calculated with 
+        flow :math:`y_{r,s}^{(i,j)}` can be calculated with
         :math:`a_{r,s}^{(j)} x_{s}^{(j)} d_{r}^{(j)} p_{r}^{(i,j)}`
         """
         # Some preparation for building huge matrices indexed
@@ -378,7 +373,7 @@ class GlobalDemoModel(object):
         countries.sort()
         sectors = self.sectors
         sectors.sort()
-        cs_labels = ['%s %s' % (c, s) for c in countries 
+        cs_labels = ['%s %s' % (c, s) for c in countries
             for s in sectors]
         sc_labels = ['%s %s' % (c, s) for s in sectors
             for c in countries]
@@ -391,12 +386,12 @@ class GlobalDemoModel(object):
         # Z = Axhat
         # Zdagger = Z(I - dhat)
         io_flows = empty.copy()
-        for i, country in enumerate(countries):    
+        for i, country in enumerate(countries):
             if country != 'RoW':
                 country = self.countries[country]
                 start = i * s
                 end = start + s
-                io_flows[start:end, 
+                io_flows[start:end,
                          start:end] = country.Z_dagger()
         io_flows = pd.DataFrame(io_flows, index=cs_labels, columns=cs_labels)
         #%%
@@ -408,7 +403,7 @@ class GlobalDemoModel(object):
             end = start + c
             P[start:end, start:end] = self.import_propensities()[sector]
         P = pd.DataFrame(P, index=sc_labels, columns=sc_labels)
-        
+
         A = empty.copy()
         D = empty.copy()
         X = empty.copy()
@@ -432,10 +427,10 @@ class GlobalDemoModel(object):
         all_flows.index.name = 'from'
         all_flows.columns.name = 'to'
         return all_flows
-    
-    def _calculate_deltas(self, new_countries, old_countries, 
+
+    def _calculate_deltas(self, new_countries, old_countries,
                           imports, tolerance):
-    
+
         deltas = pd.DataFrame()
         for s in self.sectors:
             # Flow deltas
@@ -446,12 +441,12 @@ class GlobalDemoModel(object):
                 delta = delta.rename(columns={'level_1':'country2',
                                               'from_iso3':'country1',
                                               'to_iso3':'country2'})
-                delta = delta[(delta.country1 != 'RoW') & 
+                delta = delta[(delta.country1 != 'RoW') &
                               (delta.country2 != 'RoW')]
                 deltas = delta.append(deltas)
             # Total production deltas
-            new_x = self.total_production(s, new_countries)
-            old_x = self.total_production(s)
+            new_x = self.total_production()
+            old_x = self.total_production()
             delta = _deltas(new_x, old_x, s, 'x', tolerance)
             if len(delta) > 0:
                 delta = delta.rename(columns={'level_1':'to_iso3',
@@ -471,7 +466,7 @@ class GlobalDemoModel(object):
                 to_sector = v['to_sector']
                 from_sector = v['from_sector']
                 country = v['country']
-                self.set_technical_coefficient(country=country, 
+                self.set_technical_coefficient(country=country,
                     from_sector=from_sector, to_sector=to_sector, value=value)
             elif k == 'importRatio':
                 print "not implemented yet" # TODO:
@@ -481,29 +476,62 @@ class GlobalDemoModel(object):
                 self.set_final_demand(country=country, sector=sector,
                                       value=value)
             elif k == 'importPropensity':
-                print "not implemented yet" # TODO:
+                print "not implemented yet" # TODO: Implement me!
         self._calculate = True
         self.recalculate_world()
-                                      
+
     def flows_to_json(self, country_names, sectors):
-        print "not implemented yet" # TODO: 
-        
+        print "not implemented yet" # TODO: Implement me!
+
     def trade_flows(self, country_names, sectors):
-        print "not implemented yet"# TODO: 
+        """
+        Calculate country-sector to country-sector flows using
+        country-country flows, the import ratios and the technical
+        coefficients
+        """
+        cc_flows = self._country_country_flows(country_names, 
+                                              sectors).reset_index()
+        # TODO: This section is a real mess, due to the fact that pandas
+        # 0.13.0 can not join two MultiIndexed series.
+        import_ratios = self.import_ratios().reset_index()
+        import_ratios = import_ratios.rename(columns={'country':'to_country',
+                                                      0: 'd'})
+        tech_coeffs = self.technical_coefficients().reset_index()
+        tech_coeffs = tech_coeffs.rename(columns={'country':'to_country',
+                                                  0: 'a'})
         
-    def sector_flows(self, country_names, sectors):
-        print "not implemented yet"# TODO: 
+        x = pd.merge(cc_flows, import_ratios, on=['to_country', 'sector'])
+        x = x.rename(columns={'sector':'from_sector'})
+        x = pd.merge(x, tech_coeffs, on=['to_country', 'from_sector'])
+        x = x.set_index(['from_country', 'to_country', 
+                         'from_sector', 'to_sector'])
+        x['flow_value'] = x.cc_flow_value * x.d * x.a
+        return x['flow_value'].squeeze()
             
-    def bilateral_trade_flows(self, 
-                              from_country_name, to_country_name):
+    def sector_flows(self, country_names, sectors):
+        d = [self.countries[c].Z_dagger().stack() \
+                for c in self._countries_not_RoW()]
+        return pd.concat(d, keys=self._countries_not_RoW(), 
+                         names=['country'])
+        
+
+    def _country_country_flows(self, country_names, sectors):
         """
-        Calculates all flows from `from_country_name` to `to_country_name`
-        using :math:`\tilde{P}m`
+        Calculate country to country flows per sector using
+        the imports vector and the import propensities
         """
-        print "not implemented yet" # TODO: Implement!
-    
+        imports = self.imports.reset_index()
+        # TODO: This section is a real mess, due to the fact that pandas
+        # 0.13.0 can not join two MultiIndexed series.
+        flows = self.import_propensities().reset_index()
+        x = pd.merge(flows, imports, on=['sector', 'to_country'])
+        x['cc_flow_value'] = x['0_x'] * x['0_y']
+        return x.set_index(['sector', 'from_country', 
+                            'to_country'])['cc_flow_value'].sortlevel()
+        
+
     def get_id(self, country, sector):
-        the_id = [ k for k, v in self.id_list.iteritems() 
+        the_id = [ k for k, v in self.id_list.iteritems()
                      if v['country'] == country and v['sector'] == sector ]
         if len(the_id) > 1:
             print "Key error in model's id_list: [%s, %s] has " \
@@ -512,20 +540,20 @@ class GlobalDemoModel(object):
             print "(%s, %s) not found" % (country, sector)
             return None
         return the_id[0]
-        
+
     def get_country_sector(self, lookup_id):
         """
-        
+
         Not documented yet.
-        
+
         """
         if lookup_id in self.id_list:
             return self.id_list[lookup_id]
         else:
-            return {"country":None, "sector":None}   
-            
+            return {"country":None, "sector":None}
+
 def _initialise(data, countries, sectors, silent=False):
-    """ 
+    """
     Perform step 0, initialisation, of the algorithm in the
     paper
     """
@@ -542,16 +570,16 @@ def _in(data, inlist, col_name, notin=False):
     else:
         return data[data[col_name].isin(inlist)]
 
-        
+
 def _create_M(data, countries, sectors):
-    # Construct a blank dataframe to house the import values        
+    # Construct a blank dataframe to house the import values
     M = pd.DataFrame([[s, c, 0] for s in sectors for c in countries],
                      columns=['sector','to_iso3','trade_value'])
     M = M.set_index(['sector', 'to_iso3'])
     M = M.add(data.groupby(['sector', 'to_iso3']).aggregate(sum), fill_value=0)
     M = M.rename(columns={'trade_value':'i'})
     return M.squeeze() # Convert one-column pd.DataFrame to pd.Series
- 
+
 def _insert_import_demand_into_M(all_imports,
                                  country_name,
                                  new_imports):
@@ -561,7 +589,7 @@ def _insert_import_demand_into_M(all_imports,
     """
     M = all_imports
     # Now put the new import values back into M, the
-    # import vector. 
+    # import vector.
     # TODO This is currently a bit tedious. Is there a better way?
     M = M.swaplevel(0, 1) # Now indexed Country, Sector
     M.ix[country_name] = new_imports # Set the relevant country part
@@ -572,11 +600,11 @@ def _country_import_demand(country,
                            investments=None,
                            final_demand=None):
     return country.recalculate_economy(final_demand=final_demand,
-                                       investments=investments, 
+                                       investments=investments,
                                        exports=exports)
-            
+
 def _create_E(imports):
-    M = imports    
+    M = imports
     E = M * 0
     E.index = E.index.rename(['sector', 'from_iso3'])
     return E
@@ -590,7 +618,7 @@ def _export_deficit(imports, exports):
     E = exports
     world_imports = M.sum(level='sector')
     world_exports = E.sum(level='sector')
-    
+
     return sum(np.abs(world_imports - world_exports))
 
 def _get_sector_names(flow_data):
@@ -608,82 +636,82 @@ def _world_export_requirements(imports, import_propensities):
     sectors = sorted(P.index.levels[0])
 
     all_E = map(_sector_export_requirements,
-                sectors, 
+                sectors,
                 [M.ix[s] for s in sectors],
                 [P[s] for s in sectors])
-    
+
     all_E = pd.concat(all_E, keys=sectors, names=['sector'])
 
     return all_E
 
-def _sector_export_requirements(sector, sector_imports, 
+def _sector_export_requirements(sector, sector_imports,
                                 sector_import_propensities):
     i_s = sector_imports
     P_s = sector_import_propensities
     e_s = P_s.unstack().dot(i_s)
     e_s.index.names = ['from_iso3']
     return e_s.squeeze()
-    
+
 def _world_import_requirements(countries, exports):
     """ For each country in countries, select the correct
     vector of exports from E and recalculate that countries
     economy on the basis of the new export demand"""
     E = exports
     cnames = sorted(countries.keys())
-    all_M = map(_country_import_demand, 
+    all_M = map(_country_import_demand,
                 [countries[c] for c in cnames],
                 [E.ix[:, c] for c in cnames])
-    all_M = pd.concat(all_M, keys=cnames, names=['country'])
+    all_M = pd.concat(all_M, keys=cnames, names=['to_country'])
     all_M = all_M.swaplevel(0,1).sortlevel()
 
     return all_M
 
 def _put_exports_into_countries(countries, exports):
     """
-    Put the values from the global vector E into the 
+    Put the values from the global vector E into the
     country objects' e vectors
     """
     country_sector_exports = exports.swaplevel(0, 1).sortlevel()
     g = country_sector_exports.groupby(level='from_iso3')
-    
+
     for country_name in g.groups.iterkeys():
         countries[country_name].e = country_sector_exports.ix[country_name]
 
 def _relevant_flows(trade_flows, countries):
     """
     Keep only flows to and from countries in 'countries'.
-    Set all other flows either to or from RoW. Discared 
+    Set all other flows either to or from RoW. Discared
     all flows both from and to countries not in 'countries'.
     known_to_unknown and unknown_to_known are kept for the creation
     of the RoW country later.
     """
-    fields = ['from_iso3', 'to_iso3', 'sector', 'trade_value']        
+    fields = ['from_iso3', 'to_iso3', 'sector', 'trade_value']
     data = trade_flows[~pd.isnull(trade_flows.sector)]
-    
+
     # Drop flows to-from same country
     data = data[~(data.from_iso3==data.to_iso3)]
-    
+
     from_known = data[data.from_iso3.isin(countries)][fields]
     from_unknown = data[~data.from_iso3.isin(countries)][fields]
-    
+
     known_to_known = from_known[from_known.to_iso3.isin(countries)][fields]
     known_to_unknown = from_known[~from_known.to_iso3.isin(countries)][fields]
     unknown_to_known = from_unknown[from_unknown.to_iso3.isin(countries)][fields]
-    
+
     # Set all unknown flows to go to RoW
     known_to_unknown['to_iso3'] = 'RoW'
     unknown_to_known['from_iso3'] = 'RoW'
-    
+
     # Sum the flows which are identical
     fields.remove('trade_value')
     known_to_known = known_to_known.groupby(fields, as_index=False).sum()
     known_to_unknown = known_to_unknown.groupby(fields, as_index=False).sum()
     unknown_to_known = unknown_to_known.groupby(fields, as_index=False).sum()
-    
+
     relevant_flows = pd.concat([known_to_known,
                                 known_to_unknown,
                                 unknown_to_known])
-    
+
     return known_to_unknown, unknown_to_known, relevant_flows
 
 def _create_country_sector_ids(country_names, sectors):
@@ -692,25 +720,25 @@ def _create_country_sector_ids(country_names, sectors):
     id_list = {}
     i = 1
     sectors_plus_fd = list(sectors)
-    sectors_plus_fd.append('FD') # Add Final Demand for visualisation purposes           
-    for c in country_names:   
-        for s in sectors_plus_fd: 
+    sectors_plus_fd.append('FD') # Add Final Demand for visualisation purposes
+    for c in country_names:
+        for s in sectors_plus_fd:
             id_list[i] = ({"country":c, "sector":s})
             i += 1
     return id_list
-        
-    
+
+
 def _deltas(new, old, sector, type_name, tolerance):
     """
     Calculate `new' - `old' and return those values greater than `tolerance'
-    
+
     Parameters
     ----------
     old : pd.Series
-    
+
     new : pd.Series
-    
-    tolerance : float        
+
+    tolerance : float
     """
     deltas = pd.DataFrame(new - old, columns=['delta'])
     deltas['type'] = type_name

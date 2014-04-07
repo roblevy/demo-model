@@ -6,7 +6,7 @@ Created on Mon Apr 07 14:16:10 2014
 """
 import pandas as pd
 import global_demo_model
-
+reload(global_demo_model)
 sector_flows = pd.read_csv('../Data/40 Countries/2008/sector_flows.csv',true_values='t',false_values='f')
 trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',true_values='t',false_values='f')
 services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')

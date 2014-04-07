@@ -254,7 +254,7 @@ class Country(object):
         n = investments
         e = exports
         d = import_ratios
-        x = np.linalg.solve(I - A.mul(1 - d, 'index'),
+        x = e * 0 + np.linalg.solve(I - A.mul(1 - d, 'index'),
                             (f + n).mul(1 - d, 'index') + e)
     
         return x
