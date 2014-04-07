@@ -35,7 +35,7 @@ class GlobalDemoModel(object):
                  imports, 
                  exports, 
                  import_propensities,
-                 calculate=False,
+                 calculate=True,
                  silent=False,
                  tolerance=__DEFICIT_TOLERANCE__):
         """
@@ -67,6 +67,7 @@ class GlobalDemoModel(object):
         """
         self.tolerance = tolerance
         self._silent = silent
+        self._calculate = calculate
         self.countries = countries
         self.sectors = sectors
         self.country_names = countries.keys()
@@ -76,16 +77,21 @@ class GlobalDemoModel(object):
 
         self.id_list = _create_country_sector_ids(self.country_names, sectors)
         self.deltas = pd.DataFrame()
-        if calculate:
-            # Perform the first calculation of the model
-            self.recalculate_world()
+        # Perform the first calculation of the model
+        self.recalculate_world()
     
     @classmethod    
-    def from_pickle(cls, picklefilename):
+    def from_pickle(cls, picklefilename, silent=None):
         model = cPickle.load(open(picklefilename,'r'))
-        return cls(model['countries'], model['sectors'],
-                   model['imports'], model['exports'],
-                   model['import_propensities'])
+        silent = model['silent'] if silent is None else silent
+        return cls(countries=model['countries'],
+                   sectors=model['sectors'],
+                   imports=model['imports'],
+                   exports=model['exports'],
+                   import_propensities=model['import_propensities'],
+                   calculate=model['calculate'],
+                   silent=silent,
+                   tolerance=model['tolerance'])
 
     @classmethod
     def from_data(cls, sector_flows, commodity_flows, 
@@ -161,36 +167,41 @@ class GlobalDemoModel(object):
         bool
             True if the world converged after `__MAX_ITERATIONS__`
         """
-        if tolerance is None:
-            tolerance = self.tolerance
-        countries = self.countries
-        P = self._import_propensities
 
-        E = self.exports * 0 # Set exports to zero
-
-        for i in range(__MAX_ITERATIONS__):
-            # Get imports from exports and an understanding of the
-            # internal country structure. (E is zero first time round)
-            M = _world_import_requirements(countries, E)
-            # Calculate global import/export deficit
-            deficit = _export_deficit(M, E)
-            # Now get exports given import demands and import propensities
-            E = _world_export_requirements(M, P)
-            if abs(deficit) < tolerance:
-                # stop iterating!
-                self.imports = M
-                self.exports = E
-                if not self._silent:
-                    print "World recalculated after %i iterations." % i
-                return True    
-
-        if not self._silent:
-            print "Warning: World didn't converge " \
-                  "after %i iterations." % __MAX_ITERATIONS__
-
-        return False
+        if self._calculate:
+            if tolerance is None:
+                tolerance = self.tolerance
+            countries = self.countries
+            P = self._import_propensities
+    
+            E = self.exports * 0 # Set exports to zero
+    
+            for i in range(__MAX_ITERATIONS__):
+                # Get imports from exports and an understanding of the
+                # internal country structure. (E is zero first time round)
+                M = _world_import_requirements(countries, E)
+                # Calculate global import/export deficit
+                deficit = _export_deficit(M, E)
+                # Now get exports given import demands and import propensities
+                E = _world_export_requirements(M, P)
+                if abs(deficit) < tolerance:
+                    # stop iterating!
+                    self.imports = M
+                    self.exports = E
+                    _put_exports_into_countries(countries, E)
+                    if not self._silent:
+                        print "World recalculated after %i iterations." % i
+                    return True    
+    
+            if not self._silent:
+                print "Warning: World didn't converge " \
+                      "after %i iterations." % __MAX_ITERATIONS__
+    
+            return False
+        else:
+            return False
             
-    def trade_flows(self, sector, imports=None):
+    def sector_trade_flows(self, sector, imports=None):
         """
         From-country to-country flows for the given sector.
         
@@ -254,10 +265,10 @@ class GlobalDemoModel(object):
                 self.recalculate_world()
    
     def set_import_ratio(self, country, sector, value):
-        print "not implemented yet"
+        print "not implemented yet" # TODO: 
         
     def set_import_propensity(self, sector, from_country, to_country, value):
-        print "not implemented yet"
+        print "not implemented yet" # TODO: 
    
     def final_demand(self):
         """
@@ -345,7 +356,10 @@ class GlobalDemoModel(object):
                  'sectors': self.sectors,
                  'imports': self.imports,
                  'exports': self.exports,
-                 'import_propensities': self._import_propensities}
+                 'import_propensities': self._import_propensities,
+                 'silent': self._silent,
+                 'calculate': self._calculate,
+                 'tolerance': self.tolerance}
         cPickle.dump(model, 
                      open(filename,'wb'))
 #                     protocol=cPickle.HIGHEST_PROTOCOL)
@@ -425,8 +439,8 @@ class GlobalDemoModel(object):
         deltas = pd.DataFrame()
         for s in self.sectors:
             # Flow deltas
-            new_flows = self.trade_flows(s, imports).stack()
-            old_flows = self.trade_flows(s).stack()
+            new_flows = self.sector_trade_flows(s, imports).stack()
+            old_flows = self.sector_trade_flows(s).stack()
             delta = _deltas(new_flows, old_flows, s, 'trade', tolerance)
             if len(delta) > 0:
                 delta = delta.rename(columns={'level_1':'country2',
@@ -446,39 +460,48 @@ class GlobalDemoModel(object):
                 deltas = deltas.append(delta)
         return deltas
 
-    def to_pajek(self, filename):
+    def set_from_json(self, json):
         """
-        create a .net file according to the Pajek specification
+        Set model parameters using a json file
+        """
+        self._calculate = False # Suspend automatic recalculation of the model
+        for k, v in json.iteritems():
+            value = v['value']
+            if k == 'technicalCoefficient':
+                to_sector = v['to_sector']
+                from_sector = v['from_sector']
+                country = v['country']
+                self.set_technical_coefficient(country=country, 
+                    from_sector=from_sector, to_sector=to_sector, value=value)
+            elif k == 'importRatio':
+                print "not implemented yet" # TODO:
+            elif k == 'finalDemand':
+                country = v['country']
+                sector = v['sector']
+                self.set_final_demand(country=country, sector=sector,
+                                      value=value)
+            elif k == 'importPropensity':
+                print "not implemented yet" # TODO:
+        self._calculate = True
+        self.recalculate_world()
+                                      
+    def flows_to_json(self, country_names, sectors):
+        print "not implemented yet" # TODO: 
         
-        See http://www.mapequation.org/apps/MapGenerator.html#fileformats
-        for details.
+    def trade_flows(self, country_names, sectors):
+        print "not implemented yet"# TODO: 
+        
+    def sector_flows(self, country_names, sectors):
+        print "not implemented yet"# TODO: 
+            
+    def bilateral_trade_flows(self, 
+                              from_country_name, to_country_name):
         """
-        if filename[-4:] != '.net':
-            filename += '.net'
-        print 'Writing to %s. This takes a while...' % filename
-        adj = self.adjancency_matrix()
-        flows = adj.stack().reset_index()
-        nodes = zip(*pd.factorize(adj.columns))
-        from_nodes = pd.factorize(flows['from'])
-        to_nodes = pd.factorize(flows['to'])
-        flows['from_number'] = from_nodes[0]
-        flows['to_number'] = to_nodes[0]
-        # Now build the output file
-        out = '*Vertices %i\n' % len(nodes)
-        out += '\n'.join(['%i "%s"' % (i, x) for i, x in nodes])
-        out += '\nArcs %i\n' % len(flows)
-        out += flows.to_string(columns=['from_number', 'to_number', 0],
-                               header=False, index=False)
-        with open(filename, 'w') as text_file:
-            text_file.write(out)
-            for i, x in flows.iterrows():
-                row = '%s %s %s' % (x['from_number'],
-                                    x['to_number'],
-                                    x[0])
-                text_file.write(row)
-        print '%s written' % filename
-                       
-
+        Calculates all flows from `from_country_name` to `to_country_name`
+        using :math:`\tilde{P}m`
+        """
+        print "not implemented yet" # TODO: Implement!
+    
     def get_id(self, country, sector):
         the_id = [ k for k, v in self.id_list.iteritems() 
                      if v['country'] == country and v['sector'] == sector ]
@@ -615,6 +638,16 @@ def _world_import_requirements(countries, exports):
 
     return all_M
 
+def _put_exports_into_countries(countries, exports):
+    """
+    Put the values from the global vector E into the 
+    country objects' e vectors
+    """
+    country_sector_exports = exports.swaplevel(0, 1).sortlevel()
+    g = country_sector_exports.groupby(level='from_iso3')
+    
+    for country_name in g.groups.iterkeys():
+        countries[country_name].e = country_sector_exports.ix[country_name]
 
 def _relevant_flows(trade_flows, countries):
     """
@@ -630,7 +663,6 @@ def _relevant_flows(trade_flows, countries):
     # Drop flows to-from same country
     data = data[~(data.from_iso3==data.to_iso3)]
     
-    # FROM HERE ON IN CAN BE IMPROVED WITH pd.Series.isin
     from_known = data[data.from_iso3.isin(countries)][fields]
     from_unknown = data[~data.from_iso3.isin(countries)][fields]
     

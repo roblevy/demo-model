@@ -98,7 +98,7 @@ def jsonify_model(models, filename, sectors=[]):
                 for c2 in countries:
                     if c1.name != c2.name:
                         # External flows (trade)
-                        link_value = model.trade_flows(s)[c2.name][c1.name]
+                        link_value = model.sector_trade_flows(s)[c2.name][c1.name]
                         if link_value > trade_cutoff:                
                             link = {}
                             link['source'] = _country_id(country_ids, c1.name)

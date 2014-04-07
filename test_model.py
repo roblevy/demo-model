@@ -36,20 +36,21 @@ class DemoModelInternals(unittest.TestCase):
 
         # REAL
         # ----
-#        self.tolerance = 1e-2
+#        self.tolerance = 1e-1
 #        self.test_country_name = 'GBR'
 #        self.second_test_country_name = 'USA'
 #        self.test_sector = 'Wood'
 #        self.second_test_sector = 'Business Services'
-#        sector_flows = pd.read_csv('../Data/40 Countries/2008/sector_flows.csv',true_values='t',false_values='f')
-#        trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',true_values='t',false_values='f')
-#        services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
+##        sector_flows = pd.read_csv('../Data/40 Countries/2008/sector_flows.csv',true_values='t',false_values='f')
+##        trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',true_values='t',false_values='f')
+##        services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
+##        self.model = global_demo_model. \
+##            GlobalDemoModel.from_data(sector_flows,
+##                                      trade_flows,
+##                                      services_flows, 
+##                                      silent=True, tolerance=self.tolerance)
 #        self.model = global_demo_model. \
-#            GlobalDemoModel.from_data(sector_flows,
-#                                      trade_flows,
-#                                      services_flows, 
-#                                      silent=True, tolerance=self.tolerance)
-
+#            GlobalDemoModel.from_pickle('model.gdm', silent=True)
         # country object
         self.test_country_1 = self.model.countries[self.test_country_name]
         self.B = self.model.countries[self.second_test_country_name]
@@ -97,6 +98,26 @@ class DemoModelInternals(unittest.TestCase):
         # Check x increases
         self.assertTrue(np.alltrue(np.greater(A.x, x)))
         
+    def test_country_trade_values_equal_global_trade_values(self):
+        model = self.model        
+        A = self.test_country_1
+        m = self.m
+        e = self.e
+        s = self.test_sector
+        
+        # The value of m stored by the country should be the same
+        # as the value stored by the model
+        self.assertTrue(m[s] == model.imports.ix[s, A.name])
+        # The value of e stored by the country should be the same
+        # as the value stored by the model
+        self.assertTrue(e[s] == model.exports.ix[s, A.name])
+        
+        # The above tests should still pass after something changes
+        model.set_final_demand(A, s, A.f[s] * 2)
+        self.assertTrue(A.m[s] == model.imports.ix[s, A.name])
+        self.assertTrue(A.e[s] == model.exports.ix[s, A.name])
+        
+        
     def test_global_m_and_x_increase_when_f_increases(self):
         A = self.test_country_1
         B = self.B
@@ -106,7 +127,7 @@ class DemoModelInternals(unittest.TestCase):
         fA_R = A.f[self.test_sector]
         
         # Both m and x should change when final demand changes
-        self.model.set_final_demand(A, self.test_sector, fA_R + 1000)
+        self.model.set_final_demand(A, self.test_sector, fA_R * 2)
         # Check m increases
         self.assertTrue(np.alltrue(np.greater(B.m, m)))
         # Check x increases
@@ -121,7 +142,7 @@ class DemoModelInternals(unittest.TestCase):
         fA_R = A.f[self.test_sector]
         
         # Both m and x should change when final demand changes
-        self.model.set_final_demand(A, self.test_sector, fA_R - 1000)
+        self.model.set_final_demand(A, self.test_sector, fA_R / 2)
         # Check m increases
         self.assertTrue(np.alltrue(np.less(B.m, m)))
         # Check x increases
