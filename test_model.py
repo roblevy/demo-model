@@ -13,45 +13,49 @@ import unittest
 reload(global_demo_model)
 reload(output_model)
 
+__REAL__ = True
+
 class DemoModelInternals(unittest.TestCase):
     def setUp(self):
         # Get data (either dummy or 'real')
-        # DUMMY
-        # -----
-#        self.tolerance = 1e-8
-#        self.test_country_name = 'A'
-#        self.second_test_country_name = 'B'
-#        self.test_sector = 'T'
-#        self.second_test_sector = 'R'
-#        io_data = pd.read_csv('Dummy Data/dummy_io_flows.csv',
-#                              true_values='t',false_values='f')
-#        goods_flows = pd.read_csv('Dummy Data/dummy_trade_flows.csv',
-#                                  true_values='t',false_values='f')
-#                                
-#        # Create model
-#        self.model = global_demo_model. \
-#            GlobalDemoModel.from_data(sector_flows=io_data, 
-#                                      commodity_flows=goods_flows,
-#                                      silent=True, tolerance=self.tolerance)
+        if __REAL__:
+            # REAL
+            # ----
+            self.tolerance = 1e-1
+            self.test_country_name = 'GBR'
+            self.second_test_country_name = 'USA'
+            self.test_sector = 'Wood'
+            self.second_test_sector = 'Business Services'
+#            sector_flows = pd.read_csv('../Data/40 Countries/2008/sector_flows.csv',true_values='t',false_values='f')
+#            trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',true_values='t',false_values='f')
+#            services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
+#            self.model = global_demo_model. \
+#                GlobalDemoModel.from_data(sector_flows,
+#                                          trade_flows,
+#                                          services_flows, 
+#                                          silent=True, tolerance=self.tolerance)
+            self.model = global_demo_model. \
+                GlobalDemoModel.from_pickle('model.gdm', silent=True)
+        else:
+            # DUMMY
+            # -----
+            self.tolerance = 1e-8
+            self.test_country_name = 'A'
+            self.second_test_country_name = 'B'
+            self.test_sector = 'T'
+            self.second_test_sector = 'R'
+            io_data = pd.read_csv('Dummy Data/dummy_io_flows.csv',
+                                  true_values='t',false_values='f')
+            goods_flows = pd.read_csv('Dummy Data/dummy_trade_flows.csv',
+                                      true_values='t',false_values='f')
+                                    
+            # Create model
+            self.model = global_demo_model. \
+                GlobalDemoModel.from_data(sector_flows=io_data, 
+                                          commodity_flows=goods_flows,
+                                          silent=True, tolerance=self.tolerance)
 
-        # REAL
-        # ----
-        self.tolerance = 1e-1
-        self.test_country_name = 'GBR'
-        self.second_test_country_name = 'USA'
-        self.test_sector = 'Wood'
-        self.second_test_sector = 'Business Services'
-#        sector_flows = pd.read_csv('../Data/40 Countries/2008/sector_flows.csv',true_values='t',false_values='f')
-#        trade_flows = pd.read_csv('../Data/200 Countries/2009/fn_trade_flows 2009.csv',true_values='t',false_values='f')
-#        services_flows = pd.read_csv('../Data/200 Countries/2010/balanced_services_2010.csv')
-#        self.model = global_demo_model. \
-#            GlobalDemoModel.from_data(sector_flows,
-#                                      trade_flows,
-#                                      services_flows, 
-#                                      silent=True, tolerance=self.tolerance)
-        self.model = global_demo_model. \
-            GlobalDemoModel.from_pickle('model.gdm', silent=True)
-        # country object
+        # Setup other useful details:
         self.test_country_1 = self.model.countries[self.test_country_name]
         self.test_country_2 = self.model. \
             countries[self.second_test_country_name]
@@ -211,6 +215,16 @@ class DemoModelInternals(unittest.TestCase):
         model.set_technical_coefficient(country, s, r, new_a)
         self.assertTrue((country.m != m).any)
       
+    def test_flows_to_fd_equals_fd(self):
+        model = self.model
+        fd = model.final_demand()
+        flows_to_fd = model._flows_to_final_demand()
+        flows_to_fd = flows_to_fd.sum(level=['sector', 'to_country'])
+        flows_to_fd = flows_to_fd.swaplevel(0,1).sortlevel()
+        self.assertTrue(np.allclose(fd, flows_to_fd))
+        
+        
+        
 if __name__ == '__main__':
     unittest.main(exit=False)
 

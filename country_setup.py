@@ -38,7 +38,7 @@ def create_countries_from_data(sector_flows, trade_flows):
     
     Set any negative flows to zero
     """
-    sector_flows = sector_flows.set_index(['country_iso3','from_sector','to_sector'])
+    sector_flows = sector_flows.set_index(['country','from_sector','to_sector'])
     flows = sector_flows['flow_amount']
     flows[flows < 0] = 0
     imports = flows[sector_flows['is_import']]
@@ -50,18 +50,18 @@ def create_countries_from_data(sector_flows, trade_flows):
         & sector_flows['from_production_sector']]
 
     # Domestic production (sum across all to_sector)
-    x = domestic.sum(level=['country_iso3','from_sector'])
+    x = domestic.sum(level=['country','from_sector'])
     x = rename_multiindex_level(x, 'from_sector','sector')
     # Imports (sum across all to_sector)
-    m = imports.sum(level=['country_iso3','from_sector'])
+    m = imports.sum(level=['country','from_sector'])
     m = rename_multiindex_level(m, 'from_sector','sector')
     # Exports. There are some negative export demands. Set these to zero
-    e = exports.sum(level=['country_iso3','from_sector'])
+    e = exports.sum(level=['country','from_sector'])
     e[e < 0] = 0
     e = rename_multiindex_level(e, 'from_sector','sector')
     # Final demands. Sum across all to_sector which will be the 3 final
     # demand sectors only!
-    f = final_demand.sum(level=['country_iso3','from_sector'])
+    f = final_demand.sum(level=['country','from_sector'])
     f = rename_multiindex_level(f, 'from_sector','sector')
     # Now work out the import ratios
     d = m / ((x - e) + m)

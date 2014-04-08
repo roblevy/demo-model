@@ -175,7 +175,7 @@ class Country(object):
         
         Solves :math:`Z(I - d)`
         """
-        return self.Z().dot(self._I - self.D)
+        return self.Z().mul(1 - self.d)
 
     def Z_star(self):
         """

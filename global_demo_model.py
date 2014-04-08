@@ -62,7 +62,7 @@ class GlobalDemoModel(object):
             code, e.g. Great Britain's ISO 3 code is GBR.
         countries : list
             A list of all the country ISO 3 codes. This is created by getting
-            unique values from the country_iso3 column of sector_flows.
+            unique values from the country column of sector_flows.
 
         """
         self.tolerance = tolerance
@@ -118,9 +118,14 @@ class GlobalDemoModel(object):
         -------
         GlobalDemoModel
         """
+        sector_flows = sector_flows.\
+            rename(columns={'country_iso3':'country'})
+        commodity_flows = commodity_flows.\
+            rename(columns={'country_iso3':'country'})    
+
         countries = country_setup.create_countries_from_data(sector_flows,
                                                              commodity_flows)
-        country_names = pd.unique(sector_flows['country_iso3']).tolist()
+        country_names = pd.unique(sector_flows['country']).tolist()
         sectors = _get_sector_names(sector_flows)
         if services_flows is None:
             services_flows = pd.DataFrame()
@@ -226,7 +231,7 @@ class GlobalDemoModel(object):
         """
         Technical coefficients for all countries except RoW
         """
-        A = [self.countries[c].A.unstack() \
+        A = [self.countries[c].A.unstack().reorder_levels([1, 0]) \
                 for c in self._countries_not_RoW()]
         return pd.concat(A, keys=self._countries_not_RoW(), 
                          names=['country'])
@@ -312,36 +317,17 @@ class GlobalDemoModel(object):
          : pandas.Series
         """
         df = pd.DataFrame()
-        for name, country in self.countries.iteritems():
+        for name in self._countries_not_RoW():
+            country = self.countries[name]
             fd = country.f.reset_index(name='final_demand')
-            fd['country_iso3'] = name
+            fd['country'] = name
             df = pd.concat([df, fd], 0)
-        df = df.set_index(['country_iso3','sector']).squeeze()
+        df = df.set_index(['country','sector']).squeeze()
         df.name = 'final_demand'
         return df
 
     def import_propensities(self):
         return self._import_propensities
-
-
-    def gross_output(self, with_RoW = False):
-        """
-        The gross output of each country in the model
-
-        Returns
-        -------
-        pandas.Series
-            A pandas.Series of gross_outputs, indexed on country.
-        """
-        country_names = list(self.country_names) # Make a copy
-        if not with_RoW:
-            country_names.remove('RoW')
-        g_out = pd.Series(0, index=country_names)
-        g_out.name = 'gross_output'
-        for c_name in country_names:
-            c = self.countries[c_name]
-            g_out.ix[c_name] = c.gross_output()
-        return g_out.sort_index()
 
     def to_file(self, filename):
         """
@@ -480,17 +466,66 @@ class GlobalDemoModel(object):
         self._calculate = True
         self.recalculate_world()
 
-    def flows_to_json(self, country_names, sectors):
+    def flows_to_json(self, country_names=None, sectors=None):
         print "not implemented yet" # TODO: Implement me!
+        
+    def flows(self, country_names=None, sectors=None):
+        trade_flows = self._trade_flows(country_names, sectors)
+        domestic_flows = self._domestic_flows_to_foreign_format(
+            self._io_flows(country_names, sectors))
+        trade_flows.update(domestic_flows)
+        fd_flows = self._flows_to_final_demand(country_names, sectors)
+        return pd.concat([trade_flows, fd_flows]).sortlevel()
 
-    def trade_flows(self, country_names, sectors):
+    def _flows_to_final_demand(self, country_names=None, sectors=None):
+        """
+        Calculate country-sector flows to country-sector
+        final demand
+        
+        Uses self.final_demand(), self.import_ratios() and
+        self.import_propensities()
+        """
+        fd = self.final_demand()
+        foreign = self._split_flows_by_import_ratios(fd, get_domestic=False)
+        domestic = self._split_flows_by_import_ratios(fd, get_domestic=True)
+        fd_flows = \
+            self._split_flows_by_import_propensities(foreign, 'country')
+        domestic_flows = self._domestic_flows_to_foreign_format(
+            domestic)
+        fd_flows.update(domestic_flows.reorder_levels([2,1,0]))
+        fd_flows = fd_flows.reset_index('sector').\
+            rename(columns={'sector':'from_sector'})
+        fd_flows['to_sector'] = 'fd'
+        fd_flows.set_index(['from_sector','to_sector'], 
+                           append=True, inplace=True)
+
+        return fd_flows.squeeze().sortlevel()
+
+    def _domestic_flows_to_foreign_format(self, flows):
+        """
+        Turn domestic flows into foreign (from_country/to_country) flows
+        
+        Take sector/sector flows indexed on 'country'
+        and return flows indexed on 'from_country' and 'to_country' where
+        the two index levels are the same.
+        """
+        new_index = [x.replace('country', 'to_country') 
+            for x in flows.index.names]
+        new_index = ['from_country'] + new_index
+        domestic_flows = flows.reset_index() \
+            .rename(columns={'country':'to_country'})
+        domestic_flows['from_country'] = domestic_flows['to_country']
+        return domestic_flows.set_index(new_index).squeeze()
+        
+
+    def _trade_flows(self, country_names=None, sectors=None):
         """
         Calculate country-sector to country-sector flows using
         country-country flows, the import ratios and the technical
         coefficients
         """
-        cc_flows = self._country_country_flows(country_names, 
-                                              sectors).reset_index()
+        cc_flows = self._split_flows_by_import_propensities(
+            self.imports, country_field='to_country').reset_index()
         # TODO: This section is a real mess, due to the fact that pandas
         # 0.13.0 can not join two MultiIndexed series.
         import_ratios = self.import_ratios().reset_index()
@@ -506,30 +541,44 @@ class GlobalDemoModel(object):
         x = x.set_index(['from_country', 'to_country', 
                          'from_sector', 'to_sector'])
         x['flow_value'] = x.cc_flow_value * x.d * x.a
-        return x['flow_value'].squeeze()
+        return x['flow_value'].squeeze().sortlevel()
             
-    def sector_flows(self, country_names, sectors):
+    def _io_flows(self, country_names=None, sectors=None):
         d = [self.countries[c].Z_dagger().stack() \
                 for c in self._countries_not_RoW()]
         return pd.concat(d, keys=self._countries_not_RoW(), 
                          names=['country'])
         
 
-    def _country_country_flows(self, country_names, sectors):
+    def _split_flows_by_import_propensities(self, flows,
+                                            country_field='country'):
         """
-        Calculate country to country flows per sector using
-        the imports vector and the import propensities
+        Calculate country to country flows using
+        the given flows vector and the import propensities
         """
-        imports = self.imports.reset_index()
         # TODO: This section is a real mess, due to the fact that pandas
         # 0.13.0 can not join two MultiIndexed series.
-        flows = self.import_propensities().reset_index()
-        x = pd.merge(flows, imports, on=['sector', 'to_country'])
-        x['cc_flow_value'] = x['0_x'] * x['0_y']
+        r_name = '0_y' if flows.name is None else flows.name
+        l_name = '0_x' if flows.name is None else 0
+        result = self.import_propensities().reset_index()
+        x = pd.merge(result, 
+            flows.reset_index().rename(columns={country_field:'to_country'}), 
+            on=['sector', 'to_country'])
+        x['cc_flow_value'] = x[l_name] * x[r_name]
         return x.set_index(['sector', 'from_country', 
                             'to_country'])['cc_flow_value'].sortlevel()
         
-
+    def _split_flows_by_import_ratios(self, flows, get_domestic):
+        """
+        Use self.import_ratios() to get flows either domestically
+        or foreign, depending on the value of `get_domestic`
+        """
+        # TODO: This section is a real mess, due to the fact that pandas
+        # 0.13.0 can not join two MultiIndexed series.
+        d = self.import_ratios()
+        d = 1 - d if get_domestic else d
+        return flows.mul(d, fill_value=0)
+        
     def get_id(self, country, sector):
         the_id = [ k for k, v in self.id_list.iteritems()
                      if v['country'] == country and v['sector'] == sector ]
