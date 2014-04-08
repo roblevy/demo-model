@@ -540,7 +540,7 @@ class GlobalDemoModel(object):
         x = pd.merge(x, tech_coeffs, on=['to_country', 'from_sector'])
         x = x.set_index(['from_country', 'to_country', 
                          'from_sector', 'to_sector'])
-        x['flow_value'] = x.cc_flow_value * x.d * x.a
+        x['flow_value'] = x.cc_flow_value * x.a # What about d here?
         return x['flow_value'].squeeze().sortlevel()
             
     def _io_flows(self, country_names=None, sectors=None):
