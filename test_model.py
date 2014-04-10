@@ -13,7 +13,7 @@ import unittest
 reload(global_demo_model)
 reload(output_model)
 
-__REAL__ = True
+__REAL__ = False
 
 class DemoModelInternals(unittest.TestCase):
     def setUp(self):
@@ -219,12 +219,24 @@ class DemoModelInternals(unittest.TestCase):
         model = self.model
         fd = model.final_demand()
         flows_to_fd = model._flows_to_final_demand()
-        flows_to_fd = flows_to_fd.sum(level=['sector', 'to_country'])
+        flows_to_fd = flows_to_fd.sum(level=['from_sector', 'to_country'])
         flows_to_fd = flows_to_fd.swaplevel(0,1).sortlevel()
         self.assertTrue(np.allclose(fd, flows_to_fd))
         
+    def trade_flows_sum_to_imports_and_exports(self):
+        model = self.model
+        imports = model.imports
+        exports = model.exports
+        trade_flows = model.trade_flows()
+        import_trade_flows = trade_flows.sum(level=['sector', 'to_country'])
+        export_trade_flows = trade_flows.sum(level=['sector', 'from_country'])
+        # Trade flows summed over 'from_country' should equal imports        
+        self.assertTrue(np.allclose(import_trade_flows, imports))
+        # Trade flows summed over 'to_country' should equal exports
+        self.assertTrue(np.allclose(export_trade_flows, exports))
         
-        
+    
+    
 if __name__ == '__main__':
     unittest.main(exit=False)
 

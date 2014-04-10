@@ -25,8 +25,8 @@ model = global_demo_model.GlobalDemoModel.from_data(io_data,
                                                     goods_flows,
                                                     tolerance=1e-5)
 
-
-flows = model.flows(None, None)
+outputJSON = model.flows_to_json(model.trade_flows())
+flows = model.all_flows(None, None)
 flows = flows.unstack(level=['to_country', 'to_sector'])
 
 #%% Do some testing
