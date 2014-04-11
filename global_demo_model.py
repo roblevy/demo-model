@@ -11,6 +11,7 @@ import country_setup
 import cPickle
 from import_propensities import calculate_import_propensities as get_P
 from itertools import product
+import json
 
 reload(country_setup)
 
@@ -454,8 +455,8 @@ class GlobalDemoModel(object):
         """
         value_column = flows.name if flows.name is not None else 0
         flows = flows.round().reset_index()
-        json = {}
-        json['results'] = []
+        output = {}
+        output['results'] = []
         for i, (k, flow) in enumerate(flows.iterrows()):
             d = {}
             flow_ids = self._flow_to_ids(flow)
@@ -473,10 +474,10 @@ class GlobalDemoModel(object):
             d['flowID'] = flow_ids['flow_id']
             d['indexFrom'] = flow_ids['index_from'] 
             d['indexTo'] = flow_ids['index_to']
-            json['results'].append(d)
-        json['countries'] = self._countries_not_RoW()
-        json['sectors']  = sorted(self.sectors)
-        return json
+            output['results'].append(d)
+        output['countries'] = self._countries_not_RoW()
+        output['sectors']  = sorted(self.sectors)
+        return json.dumps(output)
         
     def _flow_to_ids(self, flow):
         """
@@ -618,7 +619,7 @@ class GlobalDemoModel(object):
         Both `country_names` and `sectors` can be None, a string or a
         list of strings.
         """
-        if country_names is None and sectors is None and not with_RoW:
+        if country_names is None and sectors is None and with_RoW:
             return flows
         else:
             # What should we filter the pandas object on? (index or columns?)
