@@ -9,11 +9,14 @@ import pprint
 
 model = run_model.model
 
-countries = sorted(["USA", "GBR", "DEU", "FRA", "CHN", "IND"])
-sectors = sorted(["Agriculture", "Mining", "Food", "Wood", "Vehicles"])
-flows = model.trade_flows(countries, sectors)
+#countries = ["USA", "GBR", "DEU", "FRA", "CHN", "IND"]
+#sectors = ["Agriculture", "Mining", "Food", "Wood", "Vehicles"]
+#countries = sorted(["USA", "GBR"])
+#sectors = sorted(["Agriculture", "Food"])
+flows = model.trade_flows()
 
 flow_json = model.flows_to_json(flows)
 
 with open("model.json", "w") as f:
+    f.write("json=")
     f.write(pprint.pformat(flow_json))

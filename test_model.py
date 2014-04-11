@@ -13,7 +13,7 @@ import unittest
 reload(global_demo_model)
 reload(output_model)
 
-__REAL__ = False
+__REAL__ = True
 
 class DemoModelInternals(unittest.TestCase):
     def setUp(self):
@@ -218,24 +218,34 @@ class DemoModelInternals(unittest.TestCase):
     def test_flows_to_fd_equals_fd(self):
         model = self.model
         fd = model.final_demand()
-        flows_to_fd = model._flows_to_final_demand()
+        flows_to_fd = model._flows_to_final_demand(with_RoW=True)
         flows_to_fd = flows_to_fd.sum(level=['from_sector', 'to_country'])
         flows_to_fd = flows_to_fd.swaplevel(0,1).sortlevel()
         self.assertTrue(np.allclose(fd, flows_to_fd))
         
-    def trade_flows_sum_to_imports_and_exports(self):
+    def test_trade_flows_sum_to_imports_and_exports(self):
         model = self.model
         imports = model.imports
         exports = model.exports
-        trade_flows = model.trade_flows()
+        trade_flows = model.trade_flows(with_RoW=True)
         import_trade_flows = trade_flows.sum(level=['sector', 'to_country'])
         export_trade_flows = trade_flows.sum(level=['sector', 'from_country'])
+        idiff = import_trade_flows.sub(imports, fill_value=0)
+        ediff = export_trade_flows.sub(exports, fill_value=0)
         # Trade flows summed over 'from_country' should equal imports        
-        self.assertTrue(np.allclose(import_trade_flows, imports))
+        self.assertTrue(np.allclose(idiff, 0))
         # Trade flows summed over 'to_country' should equal exports
-        self.assertTrue(np.allclose(export_trade_flows, exports))
+        self.assertTrue(np.allclose(ediff, 0))
         
-    
+    def test_all_parameters_positive(self):
+        model = self.model
+        p = model.import_propensities()
+        self.assertTrue(len(p[p < 0]) == 0)
+        
+    def test_trade_flows_all_positive(self):
+        model = self.model
+        trade_flows = model.trade_flows()
+        self.assertTrue(len(trade_flows[trade_flows < 0]) == 0)
     
 if __name__ == '__main__':
     unittest.main(exit=False)

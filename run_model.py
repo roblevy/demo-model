@@ -15,5 +15,5 @@ model = global_demo_model. \
                               trade_flows,
                               services_flows, 
                               silent=False, tolerance=1)
-                              
+
 model.to_file('model.gdm')

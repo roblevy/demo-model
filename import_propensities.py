@@ -39,7 +39,6 @@ def calculate_import_propensities(trade_data, import_totals, countries, sectors)
         P.ix[s, 'RoW'][col_sums < 1] = \
             P_s.ix['RoW'][col_sums < 1] + (1 - col_sums)
     return P.stack()
-
         
 def _data_contains_sector(data, sector):
     sectors = pd.unique(data.sector_group_short_name)

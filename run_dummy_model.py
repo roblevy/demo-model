@@ -24,25 +24,4 @@ goods_flows = pd.read_csv('Dummy Data/dummy_trade_flows.csv',
 model = global_demo_model.GlobalDemoModel.from_data(io_data, 
                                                     goods_flows,
                                                     tolerance=1e-5)
-
-outputJSON = model.flows_to_json(model.trade_flows())
-flows = model.all_flows(None, None)
-flows = flows.unstack(level=['to_country', 'to_sector'])
-
-#%% Do some testing
-
-c = model.countries['B']
-s = 'R'
-production_flows = flows.ix[c.name, s]
-tot_flows = production_flows.sum()
-m = c.m[s]
-e = c.e[s]
-z_dag = c.Z_dagger().ix[s]
-z_star = c.Z_star().ix[s]
-f_domestic = c.f[s] * (1 - c.d[s])
-f_foreign = (model.final_demand() * 
-    model.import_ratios()).sum(level='sector')[s]
-d = c.d[s]
-
-print 'e + z_dag.sum() + (1 - d) * f: %s' % (e + z_dag.sum() + (1 - d) * f_domestic)
-print 'Total Prod %s' % c.x[s]
+model.to_file('dummy.gdm')

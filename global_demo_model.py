@@ -71,7 +71,7 @@ class GlobalDemoModel(object):
         self._calculate = calculate
         self.countries = countries
         self.sectors = sectors
-        self.country_names = countries.keys()
+        self.country_names = self._countries_not_RoW(names=countries.keys())
         self.imports = imports
         self.exports = exports
         self._import_propensities = import_propensities
@@ -260,8 +260,10 @@ class GlobalDemoModel(object):
         return pd.concat(d, keys=self._countries_not_RoW(), 
                          names=['country'])
 
-    def _countries_not_RoW(self):
-        return sorted([c for c in self.country_names \
+    def _countries_not_RoW(self, names=None):
+        if names is None:
+            names = self.country_names
+        return sorted([c for c in names \
             if c != 'RoW'])
     
     def set_final_demand(self, country, sector, value):
@@ -453,8 +455,6 @@ class GlobalDemoModel(object):
         value_column = flows.name if flows.name is not None else 0
         flows = flows.round().reset_index()
         json = {}
-        countries = set()
-        sectors = set()
         json['results'] = []
         for i, (k, flow) in enumerate(flows.iterrows()):
             d = {}
@@ -462,26 +462,20 @@ class GlobalDemoModel(object):
             d['type'] = 'result'
             d['from'] = flow['from_country']
             d['to'] = flow['to_country']
-            # Add this country to the countries set:
-            countries.add(flow['from_country'])
-            countries.add(flow['to_country'])
             d['aij'] = flow['from_country'] + flow['to_country']
             try:
                 d['sector'] = flow['sector']
-                sectors.add(flow['sector'])
             except KeyError:
                 d['from_sector'] = flow['from_sector']
                 d['to_sector'] = flow['to_sector']
-                sectors.add(flow['from_sector'])
-                sectors.add(flow['to_sector'])
             d['value'] = flow[value_column]
             d['id'] = i
             d['flowID'] = flow_ids['flow_id']
-            d['indexFrom'] = # flow_ids['index_from']
-            d['indexTo'] = # flow_ids['index_to']
+            d['indexFrom'] = flow_ids['index_from'] 
+            d['indexTo'] = flow_ids['index_to']
             json['results'].append(d)
-        json['countries'] = list(countries)
-        json['sectors']  = list(sectors)
+        json['countries'] = self._countries_not_RoW()
+        json['sectors']  = sorted(self.sectors)
         return json
         
     def _flow_to_ids(self, flow):
@@ -509,7 +503,8 @@ class GlobalDemoModel(object):
         fd_flows = self._flows_to_final_demand(country_names, sectors)
         return pd.concat([trade_flows, fd_flows]).sortlevel()
 
-    def _flows_to_final_demand(self, country_names=None, sectors=None):
+    def _flows_to_final_demand(self, country_names=None, sectors=None,
+                               with_RoW=False):
         """
         Calculate country-sector flows to country-sector
         final demand
@@ -518,6 +513,8 @@ class GlobalDemoModel(object):
         self.import_propensities()
         """
         fd_name = 'fd'
+        if sectors is None:
+            sectors = list(self.sectors) # Copy to avoid weirdness later
         sectors = _append_or_set(sectors, 'fd') # Needed for filtering later
         fd = self.final_demand()
         # Split into foreign and domestic flows using import ratios
@@ -525,7 +522,8 @@ class GlobalDemoModel(object):
         domestic = self._split_flows_by_import_ratios(fd, get_domestic=True)
         # Split the foreign flows by from_country using import propensities
         fd_flows = \
-            self._split_flows_by_import_propensities(foreign, 'country')
+            self._split_flows_by_import_propensities(
+                foreign, 'country', with_RoW=with_RoW)
         domestic_flows = self._domestic_flows_to_foreign_format(
             domestic)
         # Combine the two into a single Series
@@ -536,7 +534,8 @@ class GlobalDemoModel(object):
         fd_flows = fd_flows.set_index(['from_sector','to_sector'], 
                                       append=True).squeeze().sortlevel()
         # Now return only those flows asked for
-        fd_flows = self._filter_flows(fd_flows, country_names, sectors)
+        fd_flows = self._filter_flows(fd_flows, country_names, 
+                                      sectors, with_RoW=with_RoW)
         return fd_flows
 
     def _domestic_flows_to_foreign_format(self, flows):
@@ -597,18 +596,21 @@ class GlobalDemoModel(object):
         return pd.concat(d, keys=self._countries_not_RoW(), 
                          names=['country'])
         
-    def trade_flows(self, country_names=None, sectors=None):
+    def trade_flows(self, country_names=None, sectors=None, with_RoW=False):
         """
         Per-sector country-country flows.
         
         Calculated from the global import vector and the 
         import propensities
         """
-        imports = self._filter_flows(self.imports, country_names, sectors)
+        imports = self._filter_flows(
+            self.imports, country_names, sectors, with_RoW=with_RoW)
         return self._split_flows_by_import_propensities(
-            imports, country_field='to_country', country_names=country_names)
+            imports, country_field='to_country', 
+            country_names=country_names, with_RoW=with_RoW)
 
-    def _filter_flows(self, flows, country_names=None, sectors=None):
+    def _filter_flows(self, flows, country_names=None, sectors=None,
+                      with_RoW=False):
         """
         Filter a MultiIndexed pandas object by `country_names` and
         `sectors`.
@@ -616,17 +618,22 @@ class GlobalDemoModel(object):
         Both `country_names` and `sectors` can be None, a string or a
         list of strings.
         """
-        if country_names is None and sectors is None:
+        if country_names is None and sectors is None and not with_RoW:
             return flows
         else:
+            # What should we filter the pandas object on? (index or columns?)
             if flows.index.names[0] is None:
                 # Dataframe/Series is unindexed
                 names = flows.columns.values.tolist()
             else:
                 names = flows.index.names
+            # Prepare the filtered pandas object
             filtered = flows.copy()
             if country_names is None:
-                country_names = self._countries_not_RoW()
+                country_names = self.country_names
+            # Remove RoW
+            if with_RoW:
+                country_names = country_names + ['RoW']
             if sectors is None:
                 sectors = self.sectors
             # Level names on which to filter
@@ -644,7 +651,8 @@ class GlobalDemoModel(object):
 
     def _split_flows_by_import_propensities(self, flows,
                                             country_field='country',
-                                            country_names=None):
+                                            country_names=None,
+                                            with_RoW=False):
         """
         Calculate country to country flows using
         the given flows vector and the import propensities
@@ -653,7 +661,8 @@ class GlobalDemoModel(object):
         # 0.13.0 can not join two MultiIndexed series.
         r_name = '0_y' if flows.name is None else flows.name
         l_name = '0_x' if flows.name is None else 0
-        result = self._filter_flows(self.import_propensities(), country_names)
+        result = self._filter_flows(self.import_propensities(), country_names,
+                                    with_RoW=with_RoW)
         result = result.reset_index()
         x = pd.merge(result, 
             flows.reset_index().rename(columns={country_field:'to_country'}), 
@@ -824,12 +833,17 @@ def _put_exports_into_countries(countries, exports):
 
 def _relevant_flows(trade_flows, countries):
     """
+    Get rid of flows we're not interested in
+    
     Keep only flows to and from countries in 'countries'.
-    Set all other flows either to or from RoW. Discared
+    Set all other flows either to or from RoW. Discard
     all flows both from and to countries not in 'countries'.
     known_to_unknown and unknown_to_known are kept for the creation
     of the RoW country later.
+    Set all negative flows to zero.
     """
+    trade_flows['trade_value'][trade_flows['trade_value'] < 0] = 0    
+    
     fields = ['from_iso3', 'to_iso3', 'sector', 'trade_value']
     data = trade_flows[~pd.isnull(trade_flows.sector)]
 
