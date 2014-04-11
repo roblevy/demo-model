@@ -3,6 +3,7 @@ _static/
 _templates/
 docs/
 *.pyc
+*.gdm
 
 Makefile
 *.bat
