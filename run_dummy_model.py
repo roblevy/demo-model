@@ -25,3 +25,5 @@ model = global_demo_model.GlobalDemoModel.from_data(io_data,
                                                     goods_flows,
                                                     tolerance=1e-5)
 model.to_file('dummy.gdm')
+
+jsonflows = model.flows_to_json(model.trade_flows())

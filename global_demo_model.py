@@ -2,6 +2,8 @@
 """
 Created on Mon Jul 01 11:57:49 2013
 
+Edited in virtualbox
+
 @author: Rob
 """
 
@@ -9,6 +11,7 @@ import pandas as pd
 import numpy as np
 import country_setup
 import cPickle
+from country import Country
 from import_propensities import calculate_import_propensities as get_P
 from itertools import product
 import json
@@ -76,7 +79,8 @@ class GlobalDemoModel(object):
         self.imports = imports
         self.exports = exports
         self._import_propensities = import_propensities
-        self._country_ids = _create_ids(self.country_names)
+        self.country_ids = _create_ids(self.country_names)
+        self.sector_ids = _create_ids(self.sectors)
         self._country_sector_ids = _create_ids(
             self.country_names, sectors)
         self._country_country_sector_ids = _create_ids(
@@ -87,7 +91,7 @@ class GlobalDemoModel(object):
 
     @classmethod
     def from_pickle(cls, picklefilename, silent=None):
-        model = cPickle.load(open(picklefilename,'r'))
+        model = pd.read_pickle(picklefilename)
         silent = model['silent'] if silent is None else silent
         return cls(countries=model['countries'],
                    sectors=model['sectors'],
@@ -200,16 +204,16 @@ class GlobalDemoModel(object):
                     self.exports = E
                     _put_exports_into_countries(countries, E)
                     if not self._silent:
-                        print "World recalculated after %i iterations." % i
-                    return True
-
+                        return "World recalculated after %i iterations." % i
+                    else:
+                        return None
             if not self._silent:
-                print "Warning: World didn't converge " \
+                return "Warning: World didn't converge " \
                       "after %i iterations." % __MAX_ITERATIONS__
-
-            return False
+            else:
+                return None
         else:
-            return False
+            return None
 
     def sector_trade_flows(self, sector, imports=None):
         """
@@ -291,7 +295,7 @@ class GlobalDemoModel(object):
         if country.f[sector] != value:
 
             country.f[sector] = value
-            self.recalculate_world()
+            return self.recalculate_world()
 
     def set_technical_coefficient(self, country,
                                   from_sector, to_sector, value):
@@ -306,13 +310,39 @@ class GlobalDemoModel(object):
         if technical_coefficient != value:
             if column_sum - technical_coefficient + value < 1:
                 country.A.ix[from_sector, to_sector] = value
-                self.recalculate_world()
+                return self.recalculate_world()
 
     def set_import_ratio(self, country, sector, value):
         print "not implemented yet" # TODO:
 
     def set_import_propensity(self, sector, from_country, to_country, value):
-        print "not implemented yet" # TODO:
+        """
+        Set the import propensity and rescale to ensure propensities from
+        all countries sum to unity
+
+        Parameters
+        ----------
+        sector : string
+            Which sector's import propensities are being adjusted?
+        from_country : string
+
+        to_country : string
+
+        value : float
+
+        """
+        to_country = self.get_country(to_country).name
+        from_country = self.get_country(from_country).name
+        sector = self.get_sector(sector)
+
+        p_s = self._import_propensities.ix[sector]
+        p_s.ix[from_country, to_country] = value
+        # TODO: Rationalise to another function?
+        by_to_country = p_s.swaplevel(0,1).sortlevel()
+        rescaled = by_to_country[to_country] / sum(by_to_country[to_country]) 
+        by_to_country[to_country].update(rescaled)
+        p_s.update(by_to_country.swaplevel(0, 1).sortlevel())
+        return self.recalculate_world()
 
     def final_demand(self):
         """
@@ -339,7 +369,7 @@ class GlobalDemoModel(object):
 
     def to_file(self, filename):
         """
-        Create a pickle of the currentdemo model
+        Create a pickle of the current demo model
         """
         model = {'countries': self.countries,
                  'sectors': self.sectors,
@@ -456,42 +486,45 @@ class GlobalDemoModel(object):
         value_column = flows.name if flows.name is not None else 0
         flows = flows.round().reset_index()
         output = {}
+        countries = set()
+        sectors = set()
+        country_ids = _id_list_to_dictionaries(self.country_ids)
+        sector_ids = _id_list_to_dictionaries(self.sector_ids)
         output['results'] = []
         for i, (k, flow) in enumerate(flows.iterrows()):
             d = {}
-            flow_ids = self._flow_to_ids(flow)
-            d['type'] = 'result'
-            d['from'] = flow['from_country']
-            d['to'] = flow['to_country']
-            d['aij'] = flow['from_country'] + flow['to_country']
+            d['from'] = self.country_ids[flow['from_country']]
+            countries.add(d['from'])
+            d['to'] = self.country_ids[flow['to_country']]
+            countries.add(d['to'])
             try:
-                d['sector'] = flow['sector']
+                d['sector'] = self.sector_ids[flow['sector']]
+                sectors.add(d['sector'])
             except KeyError:
-                d['from_sector'] = flow['from_sector']
-                d['to_sector'] = flow['to_sector']
+                d['from_sector'] = self.sector_ids[flow['from_sector']]
+                sectors.add(d['from_sector'])                
+                d['to_sector'] = self.sector_ids[flow['to_sector']]
+                sectors.add(d['to_sector'])                
             d['value'] = flow[value_column]
             d['id'] = i
-            d['flowID'] = flow_ids['flow_id']
-            d['indexFrom'] = flow_ids['index_from'] 
-            d['indexTo'] = flow_ids['index_to']
             output['results'].append(d)
-        output['countries'] = self._countries_not_RoW()
-        output['sectors']  = sorted(self.sectors)
+        output['countries'] = [c for c in country_ids if c['id'] in countries]
+        output['sectors']  = [s for s in sector_ids if s['id'] in sectors]
         return json.dumps(output)
         
     def _flow_to_ids(self, flow):
         """
         Convert from_country/to_country/sector into 
         _country_country_sector_ids and from_country and 
-        to_country into self._country_ids
+        to_country into self.country_ids
         """
         from_country = flow['from_country']
         to_country = flow['to_country']
         sector = flow['sector']
         ccs = (from_country, to_country, sector)
  
-        index_from = self._country_ids[from_country]
-        index_to = self._country_ids[to_country]
+        index_from = self.country_ids[from_country]
+        index_to = self.country_ids[to_country]
         flow_id = self._country_country_sector_ids[ccs]
         return {'flow_id':flow_id, 
                 'index_from':index_from, 'index_to':index_to} 
@@ -505,11 +538,11 @@ class GlobalDemoModel(object):
         return pd.concat([trade_flows, fd_flows]).sortlevel()
 
     def _flows_to_final_demand(self, country_names=None, sectors=None,
-                               with_RoW=False):
+            with_RoW=False):
         """
         Calculate country-sector flows to country-sector
         final demand
-        
+
         Uses self.final_demand(), self.import_ratios() and
         self.import_propensities()
         """
@@ -706,6 +739,43 @@ class GlobalDemoModel(object):
         else:
             return {"country":None, "sector":None}
                     
+    def get_country_by_id(self, lookup_id):
+        country_name = keys_to_items(self.country_ids)[lookup_id]
+        return self.countries[country_name]
+
+    def get_sector_by_id(self, lookup_id):
+        return keys_to_items(self.sector_ids)[lookup_id]
+
+    def get_country(self, country):
+        """
+        get a Country object based on `country`
+
+        If `country` is a Country, return `country`.
+        If `country` is a string, assume it's the name
+        of a country
+        If `country` is a number, assume it's a country id
+        """
+        try:
+            if country.name == country.name:
+                return country
+        except AttributeError:
+            try:
+                return self.countries[country]
+            except KeyError:
+                try:
+                    return self.get_country_by_id(country)
+                except KeyError:
+                    return None
+        return None
+
+    def get_sector(self, sector):
+        """
+        Lookup by id if `sector` is a number, otherwise return `sector`
+        """
+        try:
+            return self.get_sector_by_id(sector)
+        except KeyError:
+            return sector
 
 def _initialise(data, countries, sectors, silent=False):
     """
@@ -911,3 +981,18 @@ def _append_or_set(x, to_append):
              x = to_append
      finally:
          return x
+
+def keys_to_items(unique_dictionary):
+    """
+    Swaps the keys and the items in a dictionary
+    
+    Only works if both unique_dictionary.items and unique_dictionary.keys
+    are unique
+    """
+    try: 
+        return {int(v):k for k, v in unique_dictionary.iteritems()}
+    except ValueError:
+        return {v:k for k, v in unique_dictionary.iteritems()}
+        
+def _id_list_to_dictionaries(id_list):
+    return [{'name':k, 'id':v} for k, v in id_list.iteritems()]
