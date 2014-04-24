@@ -490,7 +490,7 @@ class GlobalDemoModel(object):
         sectors = set()
         country_ids = _id_list_to_dictionaries(self.country_ids)
         sector_ids = _id_list_to_dictionaries(self.sector_ids)
-        output['results'] = []
+        output['flows'] = []
         for i, (k, flow) in enumerate(flows.iterrows()):
             d = {}
             d['from'] = self.country_ids[flow['from_country']]
@@ -507,7 +507,7 @@ class GlobalDemoModel(object):
                 sectors.add(d['to_sector'])                
             d['value'] = flow[value_column]
             d['id'] = i
-            output['results'].append(d)
+            output['flows'].append(d)
         output['countries'] = [c for c in country_ids if c['id'] in countries]
         output['sectors']  = [s for s in sector_ids if s['id'] in sectors]
         return json.dumps(output)
