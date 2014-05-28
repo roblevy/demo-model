@@ -740,7 +740,7 @@ class GlobalDemoModel(object):
             return {"country":None, "sector":None}
                     
     def get_country_by_id(self, lookup_id):
-        country_name = keys_to_items(self.country_ids)[lookup_id]
+        country_name = keys_to_items(self.country_ids)[int(lookup_id)]
         return self.countries[country_name]
 
     def get_sector_by_id(self, lookup_id):
@@ -756,10 +756,12 @@ class GlobalDemoModel(object):
         If `country` is a number, assume it's a country id
         """
         try:
+            # Is country a 'Country'?
             if country.name == country.name:
                 return country
         except AttributeError:
             try:
+                # is country a country name?
                 return self.countries[country]
             except KeyError:
                 try:
