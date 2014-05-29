@@ -15,5 +15,4 @@ model = global_demo_model. \
                               trade_flows,
                               services_flows, 
                               silent=False, tolerance=1)
-model.recalculate_world()
 model.to_file('../Models/model2010.gdm')

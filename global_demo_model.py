@@ -401,7 +401,7 @@ class GlobalDemoModel(object):
             for s in sectors]
         sc_labels = ['%s %s' % (c, s) for s in sectors
             for c in countries]
-        c = len(self.countries)
+        c = len(self.country_names)
         s = len(self.sectors)
         empty = np.zeros([c * s, c * s])
         #%%
@@ -423,9 +423,11 @@ class GlobalDemoModel(object):
         # y = axdp
         P = empty.copy()
         for i, sector in enumerate(sectors):
+            P_s = self.import_propensities().ix[sector].unstack()
+            P_s = P_s.ix[self.country_names, self.country_names] # Exclude RoW
             start = i * c
             end = start + c
-            P[start:end, start:end] = self.import_propensities()[sector]
+            P[start:end, start:end] = P_s
         P = pd.DataFrame(P, index=sc_labels, columns=sc_labels)
 
         A = empty.copy()
