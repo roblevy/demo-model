@@ -782,7 +782,7 @@ class GlobalDemoModel(object):
             return sector
             
     @classmethod
-    def name_from_iso3(iso3):
+    def name_from_iso3(cls, iso3):
         names = {
             'AUS': 'Australia',
             'AUT': 'Austria',
