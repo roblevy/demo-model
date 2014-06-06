@@ -780,6 +780,55 @@ class GlobalDemoModel(object):
             return self.get_sector_by_id(sector)
         except KeyError:
             return sector
+            
+    @classmethod
+    def name_from_iso3(iso3):
+        names = {
+            'AUS': 'Australia',
+            'AUT': 'Austria',
+            'BEL': 'Belgium',
+            'BGR': 'Bulgaria',
+            'BRA': 'Brazil',
+            'CAN': 'Canada',
+            'CHN': 'China',
+            'CYP': 'Cyprus',
+            'CZE': 'Czech Republic',
+            'DEU': 'Germany',
+            'DNK': 'Denmark',
+            'ESP': 'Spain',
+            'EST': 'Estonia',
+            'FIN': 'Finland',
+            'FRA': 'France',
+            'GBR': 'UK',
+            'GRC': 'Greece',
+            'HUN': 'Hungary',
+            'IDN': 'Indonesia',
+            'IND': 'India',
+            'IRL': 'Ireland',
+            'ITA': 'Italy',
+            'JPN': 'Japan',
+            'KOR': 'S. Korea',
+            'LTU': 'Lithuania',
+            'LUX': 'Luxembourg',
+            'LVA': 'Latvia',
+            'MEX': 'Mexico',
+            'MLT': 'Malta',
+            'NLD': 'Netherlands',
+            'POL': 'Poland',
+            'PRT': 'Portugal',
+            'ROU': 'Roumania',
+            'RUS': 'Russia',
+            'SVK': 'Slovakia',
+            'SVN': 'Slovenia',
+            'SWE': 'Sweden',
+            'TUR': 'Turkey',
+            'TWN': 'Taiwan',
+            'USA': 'USA'       
+        }
+        try:
+            return names[iso3]
+        except KeyError:
+            return iso3
 
 def _initialise(data, countries, sectors, silent=False):
     """
