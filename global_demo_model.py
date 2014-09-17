@@ -18,9 +18,6 @@ import json
 
 reload(country_setup)
 
-__MAX_ITERATIONS__ = 1000
-__DEFICIT_TOLERANCE__ = 1
-
 class GlobalDemoModel(object):
     """
     The Python implementation of an ENFOLDing global demonstration model.
@@ -42,7 +39,7 @@ class GlobalDemoModel(object):
                  import_propensities,
                  calculate=True,
                  silent=False,
-                 tolerance=__DEFICIT_TOLERANCE__):
+                 tolerance=self.__DEFICIT_TOLERANCE__):
         """
         Parameters
         ----------
@@ -86,6 +83,9 @@ class GlobalDemoModel(object):
         self._country_country_sector_ids = _create_ids(
             self.country_names, self.country_names, sectors)
         self.deltas = pd.DataFrame()
+        self.__MAX_ITERATIONS__ = 1000
+        self.__DEFICIT_TOLERANCE__ = 1
+
         # Perform the first calculation of the model
         self.recalculate_world()
 
@@ -190,7 +190,7 @@ class GlobalDemoModel(object):
 
             E = self.exports * 0 # Set exports to zero
 
-            for i in range(__MAX_ITERATIONS__):
+            for i in range(self.__MAX_ITERATIONS__):
                 # Get imports from exports and an understanding of the
                 # internal country structure. (E is zero first time round)
                 M = _world_import_requirements(countries, E)
@@ -209,7 +209,7 @@ class GlobalDemoModel(object):
                         return None
             if not self._silent:
                 return "Warning: World didn't converge " \
-                      "after %i iterations." % __MAX_ITERATIONS__
+                      "after %i iterations." % self.__MAX_ITERATIONS__
             else:
                 return None
         else:
