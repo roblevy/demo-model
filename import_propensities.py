@@ -17,10 +17,11 @@ def calculate_import_propensities(trade_data, import_totals, countries, sectors)
     to zero apart from that associated with RoW
     """
     t = trade_data
+    import_totals = t.groupby(['sector', 'to_iso3']).sum()
+    t = t.join(import_totals, on=['sector', 'to_iso3'], rsuffix='_import')
     # Calculate each import propensity, p
     t = t.set_index(['sector','from_iso3','to_iso3']).sortlevel()
-    import_totals = t.groupby(level=['sector', 'to_iso3']).transform(sum)
-    p = t / import_totals
+    p = t.trade_value / t.trade_value_import
     p = p.sum(level=[0,1,2]) # This sums over all duplicate from/to entries
     sectors = sorted(sectors)
     country_names = sorted(countries.keys())

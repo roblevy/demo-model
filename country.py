@@ -128,7 +128,7 @@ class Country(object):
             n = self.n
             
         if self.name == 'RoW':
-            # See section: Calibration of 'Rest of World' entity in the paper
+            # See section: modelling the 'Rest of World' in the paper
             self.x = self._RoW_domestic_reqs(e)
             m = self._RoW_import_reqs(f)
         else:
