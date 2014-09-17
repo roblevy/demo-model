@@ -39,7 +39,7 @@ class GlobalDemoModel(object):
                  import_propensities,
                  calculate=True,
                  silent=False,
-                 tolerance=self.__DEFICIT_TOLERANCE__):
+                 tolerance=__DEFICIT_TOLERANCE__):
         """
         Parameters
         ----------
