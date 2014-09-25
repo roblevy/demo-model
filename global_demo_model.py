@@ -39,7 +39,7 @@ class GlobalDemoModel(object):
                  import_propensities,
                  calculate=True,
                  silent=False,
-                 tolerance=__DEFICIT_TOLERANCE__):
+                 tolerance=1):
         """
         Parameters
         ----------
@@ -84,7 +84,6 @@ class GlobalDemoModel(object):
             self.country_names, self.country_names, sectors)
         self.deltas = pd.DataFrame()
         self.__MAX_ITERATIONS__ = 1000
-        self.__DEFICIT_TOLERANCE__ = 1
 
         # Perform the first calculation of the model
         self.recalculate_world()
@@ -105,7 +104,7 @@ class GlobalDemoModel(object):
     @classmethod
     def from_data(cls, sector_flows, commodity_flows,
                   services_flows=None, silent=False,
-                  tolerance=__DEFICIT_TOLERANCE__):
+                  tolerance=1):
         """
         Create a demo model from data
 

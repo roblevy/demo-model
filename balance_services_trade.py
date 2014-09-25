@@ -9,10 +9,10 @@ import services_trade
 import pandas as pd
 reload(services_trade)
 
-year = input("Which year? ")
+def perform_balancing(year):
+    data = pd.read_csv('../Data/200 Countries/vw_services_totals_%s.csv'
+        % (year))
+    services_flows = services_trade.estimate_services_trade_flows(data)    
+    services_flows.to_csv('../Data/200 Countries/balanced_services_%s.csv'
+        % (year),index=False)    
 
-data = pd.read_csv('../Data/200 Countries/%s/vw_services_totals_%s.csv' % (year,year))
-
-services_flows = services_trade.estimate_services_trade_flows(data)
-
-services_flows.to_csv('../Data/200 Countries/%s/balanced_services_%s.csv' % (year,year),index=False)
