@@ -39,6 +39,7 @@ def create_countries_from_data(sector_flows, trade_flows):
     Set any negative flows to zero
     """
     sector_flows = sector_flows.set_index(['country','from_sector','to_sector'])
+    
     flows = sector_flows['flow_amount']
     flows[flows < 0] = 0
     imports = flows[sector_flows['is_import']]

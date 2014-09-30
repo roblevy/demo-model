@@ -104,7 +104,7 @@ class GlobalDemoModel(object):
     @classmethod
     def from_data(cls, sector_flows, commodity_flows,
                   services_flows=None, silent=False,
-                  tolerance=1):
+                  tolerance=1, year=None):
         """
         Create a demo model from data
 
@@ -122,6 +122,8 @@ class GlobalDemoModel(object):
             via a balancing procedure from import/export totals.
         silent : boolean optional
             The model shouldn't report any statuses to the console
+        year: integer
+            Which year the data relates to
         Returns
         -------
         GlobalDemoModel
@@ -151,6 +153,9 @@ class GlobalDemoModel(object):
                                 silent=silent)
         model = cls(countries, sectors, M, E, P,
                     calculate=True, silent=silent, tolerance=tolerance)
+        if year is None:
+            year = 0
+        model.year = year
         return model
 
     def set_tolerance(self, tolerance):
