@@ -39,7 +39,8 @@ class GlobalDemoModel(object):
                  import_propensities,
                  calculate=True,
                  silent=False,
-                 tolerance=1):
+                 tolerance=1,
+                 year=0):
         """
         Parameters
         ----------
@@ -84,6 +85,7 @@ class GlobalDemoModel(object):
             self.country_names, self.country_names, sectors)
         self.deltas = pd.DataFrame()
         self.__MAX_ITERATIONS__ = 1000
+        self.year = year
 
         # Perform the first calculation of the model
         self.recalculate_world()
@@ -99,7 +101,8 @@ class GlobalDemoModel(object):
                    import_propensities=model['import_propensities'],
                    calculate=model['calculate'],
                    silent=silent,
-                   tolerance=model['tolerance'])
+                   tolerance=model['tolerance'],
+                   year=model['year'])
 
     @classmethod
     def from_data(cls, sector_flows, commodity_flows,
@@ -382,7 +385,8 @@ class GlobalDemoModel(object):
                  'import_propensities': self._import_propensities,
                  'silent': self._silent,
                  'calculate': self._calculate,
-                 'tolerance': self.tolerance}
+                 'tolerance': self.tolerance,
+                 'year': self.year}
         cPickle.dump(model,
                      open(filename,'wb'))
 #                     protocol=cPickle.HIGHEST_PROTOCOL)
