@@ -77,11 +77,11 @@ class GlobalDemoModel(object):
         self.imports = imports
         self.exports = exports
         self._import_propensities = import_propensities
-        self.country_ids = _create_ids(self.country_names)
-        self.sector_ids = _create_ids(self.sectors)
-        self._country_sector_ids = _create_ids(
+        self.country_ids = self._create_ids(self.country_names)
+        self.sector_ids = self._create_ids(self.sectors)
+        self._country_sector_ids = self._create_ids(
             self.country_names, sectors)
-        self._country_country_sector_ids = _create_ids(
+        self._country_country_sector_ids = self._create_ids(
             self.country_names, self.country_names, sectors)
         self.deltas = pd.DataFrame()
         self.__MAX_ITERATIONS__ = 1000
@@ -140,22 +140,21 @@ class GlobalDemoModel(object):
         countries = country_setup.create_countries_from_data(sector_flows,
                                                              commodity_flows)
         country_names = pd.unique(sector_flows['country']).tolist()
-        sectors = _get_sector_names(sector_flows)
+        sectors = cls._get_sector_names(cls, sector_flows)
         if services_flows is None:
             services_flows = pd.DataFrame()
         trade_flows = pd.concat([services_flows, commodity_flows])
-        [stray_exports,
-         stray_imports,
-         relevant_flows] = _relevant_flows(trade_flows,countries)
+        [stray_exports, stray_imports, relevant_flows] \
+            = cls._relevant_flows(cls, trade_flows,countries)
         country_names.append('RoW')
         countries['RoW'] = country_setup.create_RoW_country(stray_exports,
                                                             stray_imports,
                                                             sectors)
         # Initialise M, E and P
-        (M, E, P) = _initialise(relevant_flows, countries, sectors,
-                                silent=silent)
+        (M, E, P) = cls._initialise(cls,
+            relevant_flows, countries, sectors, silent=silent)
         model = cls(countries, sectors, M, E, P,
-                    calculate=True, silent=silent, tolerance=tolerance)
+            calculate=True, silent=silent, tolerance=tolerance)
         if year is None:
             year = 0
         model.year = year
@@ -200,16 +199,16 @@ class GlobalDemoModel(object):
             for i in range(self.__MAX_ITERATIONS__):
                 # Get imports from exports and an understanding of the
                 # internal country structure. (E is zero first time round)
-                M = _world_import_requirements(countries, E)
+                M = self._world_import_requirements(countries, E)
                 # Calculate global import/export deficit
-                deficit = _export_deficit(M, E)
+                deficit = self._export_deficit(M, E)
                 # Now get exports given import demands and import propensities
-                E = _world_export_requirements(M, P)
+                E = self._world_export_requirements(M, P)
                 if abs(deficit) < tolerance:
                     # stop iterating!
                     self.imports = M
                     self.exports = E
-                    _put_exports_into_countries(countries, E)
+                    self._put_exports_into_countries(countries, E)
                     if not self._silent:
                         return "World recalculated after %i iterations." % i
                     else:
@@ -498,8 +497,8 @@ class GlobalDemoModel(object):
         output = {}
         countries = set()
         sectors = set()
-        country_ids = _id_list_to_dictionaries(self.country_ids)
-        sector_ids = _id_list_to_dictionaries(self.sector_ids)
+        country_ids = self._id_list_to_dictionaries(self.country_ids)
+        sector_ids = self._id_list_to_dictionaries(self.sector_ids)
         output['flows'] = []
         for i, (k, flow) in enumerate(flows.iterrows()):
             d = {}
@@ -559,7 +558,8 @@ class GlobalDemoModel(object):
         fd_name = 'fd'
         if sectors is None:
             sectors = list(self.sectors) # Copy to avoid weirdness later
-        sectors = _append_or_set(sectors, 'fd') # Needed for filtering later
+        # Needed for filtering later:
+        sectors = self._append_or_set(sectors, 'fd') 
         fd = self.final_demand()
         # Split into foreign and domestic flows using import ratios
         foreign = self._split_flows_by_import_ratios(fd, get_domestic=False)
@@ -687,9 +687,9 @@ class GlobalDemoModel(object):
                 if str(l).find('country') >= 0]
             
             for level in sector_levels:
-                filtered = _filter_series(filtered, level, sectors)
+                filtered = self._filter_series(filtered, level, sectors)
             for level in country_levels:
-                filtered = _filter_series(filtered, level, country_names)
+                filtered = self._filter_series(filtered, level, country_names)
                 
             return filtered
 
@@ -750,11 +750,11 @@ class GlobalDemoModel(object):
             return {"country":None, "sector":None}
                     
     def get_country_by_id(self, lookup_id):
-        country_name = keys_to_items(self.country_ids)[int(lookup_id)]
+        country_name = self.keys_to_items(self.country_ids)[int(lookup_id)]
         return self.countries[country_name]
 
     def get_sector_by_id(self, lookup_id):
-        return keys_to_items(self.sector_ids)[lookup_id]
+        return self.keys_to_items(self.sector_ids)[lookup_id]
 
     def get_country(self, country):
         """
@@ -838,222 +838,222 @@ class GlobalDemoModel(object):
         except KeyError:
             return iso3
 
-def _initialise(data, countries, sectors, silent=False):
-    """
-    Perform step 0, initialisation, of the algorithm in the
-    paper
-    """
-    M = _create_M(data, countries, sectors)
-    E = _create_E(M)
-    P = get_P(data, M, countries, sectors)
-    if not silent:
-        print "Initialisation complete"
-    return M, E, P
-
-def _in(data, inlist, col_name, notin=False):
-    if notin:
-        return data[~data[col_name].isin(inlist)]
-    else:
-        return data[data[col_name].isin(inlist)]
-
-
-def _create_M(data, countries, sectors):
-    # Construct a blank dataframe to house the import values
-    M = pd.DataFrame([[s, c, 0] for s in sectors for c in countries],
-                     columns=['sector','to_iso3','trade_value'])
-    M = M.set_index(['sector', 'to_iso3'])
-    M = M.add(data.groupby(['sector', 'to_iso3']).aggregate(sum), fill_value=0)
-    M = M.rename(columns={'trade_value':'i'})
-    return M.squeeze() # Convert one-column pd.DataFrame to pd.Series
-
-def _insert_import_demand_into_M(all_imports,
-                                 country_name,
-                                 new_imports):
-    """
-    Insert a newly calculated import demand from a single country
-    into the model's vector of all import demands
-    """
-    M = all_imports
-    # Now put the new import values back into M, the
-    # import vector.
-    # TODO This is currently a bit tedious. Is there a better way?
-    M = M.swaplevel(0, 1) # Now indexed Country, Sector
-    M.ix[country_name] = new_imports # Set the relevant country part
-    return M.swaplevel(1, 0) # Swapped back
-
-def _country_import_demand(country,
-                           exports=None,
-                           investments=None,
-                           final_demand=None):
-    return country.recalculate_economy(final_demand=final_demand,
-                                       investments=investments,
-                                       exports=exports)
-
-def _create_E(imports):
-    M = imports
-    E = M * 0
-    E.index = E.index.rename(['sector', 'from_country'])
-    return E
-
-def _export_deficit(imports, exports):
-    """
-    Sum over sectors of M - sum of sectors of E, take the absolute value
-    and sum.
-    """
-    M = imports
-    E = exports
-    world_imports = M.sum(level='sector')
-    world_exports = E.sum(level='sector')
-
-    return sum(np.abs(world_imports - world_exports))
-
-def _get_sector_names(flow_data):
-    data = flow_data
-    data = data[data['from_production_sector']]
-    data = data[~pd.isnull(data['from_sector'])]
-    return pd.unique(data['from_sector']).tolist()
-
-def _world_export_requirements(imports, import_propensities):
-    """ Create the matrix of export requirements, E. This is
-    done based on the import requirements of all sectors in
-    all countries."""
-    M = imports
-    P = import_propensities
-    sectors = sorted(P.index.levels[0])
-
-    all_E = map(_sector_export_requirements,
-                sectors,
-                [M.ix[s] for s in sectors],
-                [P[s] for s in sectors])
-
-    all_E = pd.concat(all_E, keys=sectors, names=['sector'])
-
-    return all_E
-
-def _sector_export_requirements(sector, sector_imports,
-                                sector_import_propensities):
-    i_s = sector_imports
-    P_s = sector_import_propensities
-    e_s = P_s.unstack().dot(i_s)
-    e_s.index.names = ['from_country']
-    return e_s.squeeze()
-
-def _world_import_requirements(countries, exports):
-    """ For each country in countries, select the correct
-    vector of exports from E and recalculate that countries
-    economy on the basis of the new export demand"""
-    E = exports
-    cnames = sorted(countries.keys())
-    all_M = map(_country_import_demand,
-                [countries[c] for c in cnames],
-                [E.ix[:, c] for c in cnames])
-    all_M = pd.concat(all_M, keys=cnames, names=['to_country'])
-    all_M = all_M.swaplevel(0,1).sortlevel()
-
-    return all_M
-
-def _put_exports_into_countries(countries, exports):
-    """
-    Put the values from the global vector E into the
-    country objects' e vectors
-    """
-    country_sector_exports = exports.swaplevel(0, 1).sortlevel()
-    g = country_sector_exports.groupby(level='from_country')
-
-    for country_name in g.groups.iterkeys():
-        countries[country_name].e = country_sector_exports.ix[country_name]
-
-def _relevant_flows(trade_flows, countries):
-    """
-    Get rid of flows we're not interested in
+    def _initialise(self, data, countries, sectors, silent=False):
+        """
+        Perform step 0, initialisation, of the algorithm in the
+        paper
+        """
+        M = self._create_M(data, countries, sectors)
+        E = self._create_E(M)
+        P = get_P(data, M, countries, sectors)
+        if not silent:
+            print "Initialisation complete"
+        return M, E, P
     
-    Keep only flows to and from countries in 'countries'.
-    Set all other flows either to or from RoW. Discard
-    all flows both from and to countries not in 'countries'.
-    known_to_unknown and unknown_to_known are kept for the creation
-    of the RoW country later.
-    Set all negative flows to zero.
-    """
-    trade_flows['trade_value'][trade_flows['trade_value'] < 0] = 0    
+    def _in(self, data, inlist, col_name, notin=False):
+        if notin:
+            return data[~data[col_name].isin(inlist)]
+        else:
+            return data[data[col_name].isin(inlist)]
     
-    fields = ['from_iso3', 'to_iso3', 'sector', 'trade_value']
-    data = trade_flows[~pd.isnull(trade_flows.sector)]
-
-    # Drop flows to-from same country
-    data = data[~(data.from_iso3==data.to_iso3)]
-
-    from_known = data[data.from_iso3.isin(countries)][fields]
-    from_unknown = data[~data.from_iso3.isin(countries)][fields]
-
-    known_to_known = from_known[from_known.to_iso3.isin(countries)][fields]
-    known_to_unknown = from_known[~from_known.to_iso3.isin(countries)][fields]
-    unknown_to_known = from_unknown[from_unknown.to_iso3.isin(countries)][fields]
-
-    # Set all unknown flows to go to RoW
-    known_to_unknown['to_iso3'] = 'RoW'
-    unknown_to_known['from_iso3'] = 'RoW'
-
-    # Sum the flows which are identical
-    fields.remove('trade_value')
-    known_to_known = known_to_known.groupby(fields, as_index=False).sum()
-    known_to_unknown = known_to_unknown.groupby(fields, as_index=False).sum()
-    unknown_to_known = unknown_to_known.groupby(fields, as_index=False).sum()
-
-    relevant_flows = pd.concat([known_to_known,
-                                known_to_unknown,
-                                unknown_to_known])
-
-    return known_to_unknown, unknown_to_known, relevant_flows
-
-def _create_ids(*args):
-    sorted_args = []
-    for arg in args:
-        sorted_args.append(sorted(arg))
-    if len(sorted_args) > 1:
-        return {v:k for k, v in enumerate(product(*sorted_args))}
-    else:
-        return {v:k for k, v in enumerate(sorted_args[0])}
     
-def _filter_series(x, filter_on, filter_by):
-    """
-    Filter a pd.Generic x by `filter_by` on the 
-    MultiIndex level or column `filter_on`.
+    def _create_M(self, data, countries, sectors):
+        # Construct a blank dataframe to house the import values
+        M = pd.DataFrame([[s, c, 0] for s in sectors for c in countries],
+                         columns=['sector','to_iso3','trade_value'])
+        M = M.set_index(['sector', 'to_iso3'])
+        M = M.add(data.groupby(['sector', 'to_iso3']).aggregate(sum), fill_value=0)
+        M = M.rename(columns={'trade_value':'i'})
+        return M.squeeze() # Convert one-column pd.DataFrame to pd.Series
     
-    Uses `pd.Index.get_level_values()` in the background
-    """
-    if isinstance(x, pd.Series) or isinstance(x, pd.DataFrame):
-        if type(filter_by) is str:
-            filter_by = [filter_by]
-        try:
-            index = x.index.get_level_values(filter_on).isin(filter_by)
-        except:
-            index = x[filter_on].isin(filter_by)
-        return x[index]
-    else:
-        print "Not a pandas object"
+    def _insert_import_demand_into_M(self, all_imports,
+                                     country_name,
+                                     new_imports):
+        """
+        Insert a newly calculated import demand from a single country
+        into the model's vector of all import demands
+        """
+        M = all_imports
+        # Now put the new import values back into M, the
+        # import vector.
+        # TODO This is currently a bit tedious. Is there a better way?
+        M = M.swaplevel(0, 1) # Now indexed Country, Sector
+        M.ix[country_name] = new_imports # Set the relevant country part
+        return M.swaplevel(1, 0) # Swapped back
     
-def _append_or_set(x, to_append):
-     try:
-         x.append(to_append)
-     except AttributeError:
-         if x:
-             x = [x, to_append]
-         else:
-             x = to_append
-     finally:
-         return x
-
-def keys_to_items(unique_dictionary):
-    """
-    Swaps the keys and the items in a dictionary
+    def _country_import_demand(self, country,
+                               exports=None,
+                               investments=None,
+                               final_demand=None):
+        return country.recalculate_economy(final_demand=final_demand,
+                                           investments=investments,
+                                           exports=exports)
     
-    Only works if both unique_dictionary.items and unique_dictionary.keys
-    are unique
-    """
-    try: 
-        return {int(v):k for k, v in unique_dictionary.iteritems()}
-    except ValueError:
-        return {v:k for k, v in unique_dictionary.iteritems()}
+    def _create_E(self, imports):
+        M = imports
+        E = M * 0
+        E.index = E.index.rename(['sector', 'from_country'])
+        return E
+    
+    def _export_deficit(self, imports, exports):
+        """
+        Sum over sectors of M - sum of sectors of E, take the absolute value
+        and sum.
+        """
+        M = imports
+        E = exports
+        world_imports = M.sum(level='sector')
+        world_exports = E.sum(level='sector')
+    
+        return sum(np.abs(world_imports - world_exports))
+    
+    def _get_sector_names(self, flow_data):
+        data = flow_data
+        data = data[data['from_production_sector']]
+        data = data[~pd.isnull(data['from_sector'])]
+        return pd.unique(data['from_sector']).tolist()
+    
+    def _world_export_requirements(self, imports, import_propensities):
+        """ Create the matrix of export requirements, E. This is
+        done based on the import requirements of all sectors in
+        all countries."""
+        M = imports
+        P = import_propensities
+        sectors = sorted(P.index.levels[0])
+    
+        all_E = map(self._sector_export_requirements,
+                    sectors,
+                    [M.ix[s] for s in sectors],
+                    [P[s] for s in sectors])
+    
+        all_E = pd.concat(all_E, keys=sectors, names=['sector'])
+    
+        return all_E
+    
+    def _sector_export_requirements(self, sector, sector_imports,
+                                    sector_import_propensities):
+        i_s = sector_imports
+        P_s = sector_import_propensities
+        e_s = P_s.unstack().dot(i_s)
+        e_s.index.names = ['from_country']
+        return e_s.squeeze()
+    
+    def _world_import_requirements(self, countries, exports):
+        """ For each country in countries, select the correct
+        vector of exports from E and recalculate that countries
+        economy on the basis of the new export demand"""
+        E = exports
+        cnames = sorted(countries.keys())
+        all_M = map(self._country_import_demand,
+                    [countries[c] for c in cnames],
+                    [E.ix[:, c] for c in cnames])
+        all_M = pd.concat(all_M, keys=cnames, names=['to_country'])
+        all_M = all_M.swaplevel(0,1).sortlevel()
+    
+        return all_M
+    
+    def _put_exports_into_countries(self, countries, exports):
+        """
+        Put the values from the global vector E into the
+        country objects' e vectors
+        """
+        country_sector_exports = exports.swaplevel(0, 1).sortlevel()
+        g = country_sector_exports.groupby(level='from_country')
+    
+        for country_name in g.groups.iterkeys():
+            countries[country_name].e = country_sector_exports.ix[country_name]
+    
+    def _relevant_flows(self, trade_flows, countries):
+        """
+        Get rid of flows we're not interested in
         
-def _id_list_to_dictionaries(id_list):
-    return [{'name':k, 'id':v} for k, v in id_list.iteritems()]
+        Keep only flows to and from countries in 'countries'.
+        Set all other flows either to or from RoW. Discard
+        all flows both from and to countries not in 'countries'.
+        known_to_unknown and unknown_to_known are kept for the creation
+        of the RoW country later.
+        Set all negative flows to zero.
+        """
+        trade_flows['trade_value'][trade_flows['trade_value'] < 0] = 0    
+        
+        fields = ['from_iso3', 'to_iso3', 'sector', 'trade_value']
+        data = trade_flows[~pd.isnull(trade_flows.sector)]
+    
+        # Drop flows to-from same country
+        data = data[~(data.from_iso3==data.to_iso3)]
+    
+        from_known = data[data.from_iso3.isin(countries)][fields]
+        from_unknown = data[~data.from_iso3.isin(countries)][fields]
+    
+        known_to_known = from_known[from_known.to_iso3.isin(countries)][fields]
+        known_to_unknown = from_known[~from_known.to_iso3.isin(countries)][fields]
+        unknown_to_known = from_unknown[from_unknown.to_iso3.isin(countries)][fields]
+    
+        # Set all unknown flows to go to RoW
+        known_to_unknown['to_iso3'] = 'RoW'
+        unknown_to_known['from_iso3'] = 'RoW'
+    
+        # Sum the flows which are identical
+        fields.remove('trade_value')
+        known_to_known = known_to_known.groupby(fields, as_index=False).sum()
+        known_to_unknown = known_to_unknown.groupby(fields, as_index=False).sum()
+        unknown_to_known = unknown_to_known.groupby(fields, as_index=False).sum()
+    
+        relevant_flows = pd.concat([known_to_known,
+                                    known_to_unknown,
+                                    unknown_to_known])
+    
+        return known_to_unknown, unknown_to_known, relevant_flows
+    
+    def _create_ids(self, *args):
+        sorted_args = []
+        for arg in args:
+            sorted_args.append(sorted(arg))
+        if len(sorted_args) > 1:
+            return {v:k for k, v in enumerate(product(*sorted_args))}
+        else:
+            return {v:k for k, v in enumerate(sorted_args[0])}
+        
+    def _filter_series(self, x, filter_on, filter_by):
+        """
+        Filter a pd.Generic x by `filter_by` on the 
+        MultiIndex level or column `filter_on`.
+        
+        Uses `pd.Index.get_level_values()` in the background
+        """
+        if isinstance(x, pd.Series) or isinstance(x, pd.DataFrame):
+            if type(filter_by) is str:
+                filter_by = [filter_by]
+            try:
+                index = x.index.get_level_values(filter_on).isin(filter_by)
+            except:
+                index = x[filter_on].isin(filter_by)
+            return x[index]
+        else:
+            print "Not a pandas object"
+        
+    def _append_or_set(self, x, to_append):
+         try:
+             x.append(to_append)
+         except AttributeError:
+             if x:
+                 x = [x, to_append]
+             else:
+                 x = to_append
+         finally:
+             return x
+    
+    def keys_to_items(self, unique_dictionary):
+        """
+        Swaps the keys and the items in a dictionary
+        
+        Only works if both unique_dictionary.items and unique_dictionary.keys
+        are unique
+        """
+        try: 
+            return {int(v):k for k, v in unique_dictionary.iteritems()}
+        except ValueError:
+            return {v:k for k, v in unique_dictionary.iteritems()}
+            
+    def _id_list_to_dictionaries(self, id_list):
+        return [{'name':k, 'id':v} for k, v in id_list.iteritems()]
