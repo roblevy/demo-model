@@ -13,6 +13,7 @@ from demo_model.country import Country
 from import_propensities import calculate_import_propensities as get_P
 from itertools import product
 import json
+import multiprocessing as mp
 
 class GlobalDemoModel(object):
     """
@@ -841,14 +842,6 @@ class GlobalDemoModel(object):
         M.ix[country_name] = new_imports # Set the relevant country part
         return M.swaplevel(1, 0) # Swapped back
     
-    def _country_import_demand(self, country,
-                               exports=None,
-                               investments=None,
-                               final_demand=None):
-        return country.recalculate_economy(final_demand=final_demand,
-                                           investments=investments,
-                                           exports=exports)
-    
     def _export_deficit(self, imports, exports):
         """
         Sum over sectors of M - sum of sectors of E, take the absolute value
@@ -890,16 +883,16 @@ class GlobalDemoModel(object):
         """ For each country in countries, select the correct
         vector of exports from E and recalculate that countries
         economy on the basis of the new export demand"""
-        E = exports
-        cnames = sorted(countries.keys())
-        all_M = map(self._country_import_demand,
-                    [countries[c] for c in cnames],
-                    [E.ix[:, c] for c in cnames])
-        all_M = pd.concat(all_M, keys=cnames, names=['to_country'])
+        E = exports.swaplevel(0,1).sortlevel()
+        countries = self.countries
+        for c in countries:
+            countries[c].e = E.ix[c]
+        all_M = map(_country_import_demand, countries.iteritems())
+        all_M = pd.concat(dict(all_M), names=['to_country'])
         all_M = all_M.swaplevel(0,1).sortlevel()
     
         return all_M
-    
+            
     def _put_exports_into_countries(self, countries, exports):
         """
         Put the values from the global vector E into the
@@ -963,6 +956,10 @@ class GlobalDemoModel(object):
             
     def _id_list_to_dictionaries(self, id_list):
         return [{'name':k, 'id':v} for k, v in id_list.iteritems()]
+
+def _country_import_demand(country_and_name):
+    name, country = country_and_name
+    return name, country.recalculate_economy()
 
 def _initialise(data, countries, sectors, silent=False):
     """
