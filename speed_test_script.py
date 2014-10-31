@@ -11,9 +11,9 @@ import numpy as np
 #%%
 # Get data
 #model = global_demo_model.GlobalDemoModel.from_pickle('Dummy Data/dummy-model.gdm')
-if 'model' not in globals():
-    #model = global_demo_model.GlobalDemoModel.from_pickle('../Models/model2010.gdm')
-    model = global_demo_model.GlobalDemoModel.from_pickle('deleteme.pickle')    
-    model.set_tolerance(.001)
+#if 'model' not in globals():
+#    #model = global_demo_model.GlobalDemoModel.from_pickle('../Models/model2010.gdm')
+#    model = global_demo_model.GlobalDemoModel.from_pickle('deleteme.pickle')    
+#    model.set_tolerance(.001)
 
-[model.recalculate_world() for x in range(1)]
+[modelhello.recalculate_world() for x in range(1)]

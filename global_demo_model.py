@@ -88,17 +88,16 @@ class GlobalDemoModel(object):
 
     @classmethod
     def from_pickle(cls, picklefilename, silent=None):
-        model = pd.read_pickle(picklefilename)
-        silent = model['silent'] if silent is None else silent
-        return cls(countries=model['countries'],
-                   sectors=model['sectors'],
-                   imports=model['imports'],
-                   exports=model['exports'],
-                   import_propensities=model['import_propensities'],
-                   calculate=model['calculate'],
-                   silent=silent,
-                   tolerance=model['tolerance'],
-                   year=model['year'])
+        with open(picklefilename, 'rb') as f:
+            model = cPickle.load(f)
+        return model
+
+    def to_pickle(self, picklefilename):
+        """
+        Create a pickle of the current demo model
+        """
+        with open(picklefilename, 'wb') as f:
+            cPickle.dump(self, f, -1)
 
     @classmethod
     def from_data(cls, sector_flows, commodity_flows,
@@ -371,23 +370,6 @@ class GlobalDemoModel(object):
 
     def import_propensities(self):
         return self._import_propensities
-
-    def to_file(self, filename):
-        """
-        Create a pickle of the current demo model
-        """
-        model = {'countries': self.countries,
-                 'sectors': self.sectors,
-                 'imports': self.imports,
-                 'exports': self.exports,
-                 'import_propensities': self._import_propensities,
-                 'silent': self._silent,
-                 'calculate': self._calculate,
-                 'tolerance': self.tolerance,
-                 'year': self.year}
-        cPickle.dump(model,
-                     open(filename,'wb'))
-#                     protocol=cPickle.HIGHEST_PROTOCOL)
 
     def adjacency_matrix(self):
         """
