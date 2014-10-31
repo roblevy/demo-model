@@ -10,6 +10,7 @@ are not already implemented by the networkx package
 
 import numpy as np
 import networkx as nx
+import demo_model.network.io as network_io
 
 #%%
 ## Testing only
@@ -80,8 +81,10 @@ def nodal_flow(X, sizes, find_sources=True):
     Take a matrix and return a matrix with only the largest value
     remaining in each column.
     """
+    # Remove all negative entries
+    X = X[X > 0].fillna(0)
     # remove all rows and columns whose column sums are zero:
-    X = X.ix[X.sum(0) > 0,X.sum(0) > 0]
+    X = X.ix[X.sum(0) > 0, X.sum(0) > 0]
     if not X.empty:
         # Adjust raw-data matrix to proportion of largest total association
         # (p36 of the paper)
@@ -95,8 +98,8 @@ def nodal_flow(X, sizes, find_sources=True):
         nodal_B = B * 0
         largest_flows = X.idxmax(1)
         for row_name, column_largest_flow in largest_flows.iteritems():
-            nodal_B.ix[row_name][largest_flows[row_name]] \
-            = (1 * (sizes[row_name] < sizes[column_largest_flow]))
+            nodal_B.loc[row_name, largest_flows[row_name]] \
+                = (1 * (sizes[row_name] < sizes[column_largest_flow]))
         return nodal_B
     else:
         return X
@@ -152,8 +155,8 @@ def max_edge(G, attrib_name, edges=None):
     else:
         return None
     
-test_G = edmonds(G)
-print test_G.edges(data=True)
+# test_G = edmonds(G)
+# print test_G.edges(data=True)
 # Expect:
 #C-4->B 
 #^    ^

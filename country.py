@@ -164,10 +164,23 @@ class Country(object):
         Sector-to-sector flows. 
         
         These flows are not used in the model, but are useful
-        for analysis and visualisation.
+        for analysis and visualisation. Since RoW has no intermediate flows
+        this will return the output of `_restofworld_Z()`.
         """
-        # xhat = diagonalise(self.x)        
-        return self.A * self.x # self.A.dot(xhat)
+        # xhat = diagonalise(self.x)
+        if self.name == 'RoW':
+            return self._restofworld_matrix()
+        else:
+            return self.A * self.x # self.A.dot(xhat)
+
+    def _restofworld_matrix(self):
+        """
+        A matrix of zeros, the columns and rows of which are labelled with
+        the sectors
+        """
+        import pandas as pd
+        sectors = self.f.index.values
+        return pd.DataFrame(0, index=sectors, columns=sectors)
         
     def Z_dagger(self):
         """
