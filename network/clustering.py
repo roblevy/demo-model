@@ -9,17 +9,6 @@ import pyximport; pyximport.install(reload_support=True)
 import clustering_c
 reload(clustering_c)
 
-class Adjacency():
-    def __init__(self, adjacency):
-        self.adjacency = adjacency
-        self.edges = adjacency[adjacency > 0]
-        self.indegrees = self.edges.sum()
-        self.outdegrees = self.edges.sum(1)
-        self.num_of_edges = self.edges.sum().sum()
-
-    def __repr__(self):
-        return str(self.adjacency)
-        
 def _brute_force(adjacency, hessian):
     """
     Use brute force to test for every combination of two clusters
@@ -52,9 +41,8 @@ if __name__ == "__main__":
     adj = pd.DataFrame(rows).astype(float)
     adj.index = names
     adj.columns = names
-    a = Adjacency(adj)
+    a = clustering_c.Network(adj)
     test_communities = pd.Series([0,0,0,0,0,0,0,0], index=names)
     modularity = _brute_force(a, clustering_c.modularity)
     potts = _brute_force(a, clustering_c.reichardt_bornholdt)
-    
     
