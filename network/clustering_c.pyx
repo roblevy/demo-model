@@ -161,16 +161,15 @@ cdef double _adhesion_ls(long l, long s):
 
 @cython.boundscheck(False)
 @cython.cdivision(True)
-cdef double[:] _l_update_probabilities(long l, double t):
+cdef double[:] _l_update_probabilities(long l, double t,
+                                        long l_current_group, double[:] p):
     """
     An array of probablities for node l to move to each group
     at temperature t
     
     See eqns 23 and 29 in Reichardt and Bornholdt
     """
-    global prob_node_in_group
     cdef:
-        long l_current_group = community_labels[l]
         double l_current_adhesion = _adhesion_ls(l=l, s=l_current_group)
         double prob_all_groups = 0
         float delta_H_s # Change in energy moving l to group s
@@ -182,12 +181,12 @@ cdef double[:] _l_update_probabilities(long l, double t):
         else:
             # Node l not already in group s
             delta_H_s = l_current_adhesion - _adhesion_ls(l=l, s=s)
-        prob_node_in_group[s] = exp((-1 / t) * delta_H_s)
-        prob_all_groups += prob_node_in_group[s]
+        p[s] = exp((-1 / t) * delta_H_s)
+        prob_all_groups += p[s]
     # Divide each element of prob_node_in_group by the total probability
     for i in range(group_count):
-        prob_node_in_group[i] = prob_node_in_group[i] / prob_all_groups
-    return prob_node_in_group
+        p[i] = p[i] / prob_all_groups
+    return p
                     
 cdef long[:] _randomise_community_membership(long n, long g):
     cdef long[:] groups = np.empty(n, dtype=long)
@@ -211,25 +210,31 @@ cdef long _sum_array(long[:] in_array):
         result += in_array[i]
     return result
 
+@cython.boundscheck(False)
 cdef int cluster_simulated_annealing(double start_t, double end_t, 
                                      double t_step = 0.99) except -1:
     cdef:
         long node_count = len(adjacency)
         long loops_at_current_t = node_count * 50
         long node, new_group
+        long node_group
         double t = start_t
         double[:] update_probabilities
-    
+        double[:] p = prob_node_in_group
+        long[:] c = community_labels
+
     while t > end_t:
         for i in range(loops_at_current_t):
             # Pick a random node
             node = rand_int(node_count)
-            update_probabilities = _l_update_probabilities(l=node, t=t)
+            node_group = c[node] 
+            update_probabilities = _l_update_probabilities(l=node, t=t,
+                l_current_group=node_group, p=p)
             new_group = _weighted_random_int(update_probabilities)
             if new_group < 0:
                 print "Something's wrong: %s" % np.array(update_probabilities)
                 raise ValueError
-            community_labels[node] = new_group
+            c[node] = new_group
         t *= t_step
     return 1
         
