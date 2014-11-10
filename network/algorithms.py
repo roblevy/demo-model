@@ -10,7 +10,7 @@ are not already implemented by the networkx package
 
 import numpy as np
 import networkx as nx
-import demo_model.network.io as network_io
+import demo_model.network.networkio as network_io
 
 #%%
 ## Testing only

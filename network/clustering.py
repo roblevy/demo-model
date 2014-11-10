@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pyximport; pyximport.install(reload_support=True)
 import clustering_c
-reload(clustering_c)
+#reload(clustering_c)
 
 def _brute_force(adjacency, hessian):
     """
@@ -21,8 +21,28 @@ def _brute_force(adjacency, hessian):
     community_lists = [pd.Series(list(x), index=names).astype(np.int64) 
         for x in binary] 
     objective = pd.Series(
-        {str(c.values):hessian(adjacency, c) for c in community_lists})
+        {str(c.values):hessian(adjacency, c.values) for c in community_lists})
     return objective.order(ascending=False)
+
+def reichardt_bornholdt(adjacency, **kwargs):
+    """
+    Produce a clustering of the network represented by the adjacency
+    matrix `adjacency`.
+    
+    Parameters
+    ----------
+    adjacency: pandas.core.frame.DataFrame
+        A DataFrame representing an adjacency matrix
+        
+    Returns
+    -------
+    A Series representing the community membership
+    """
+    network = clustering_c.Network(adjacency)
+    communities = clustering_c.cluster(network, **kwargs)
+    communities = pd.DataFrame(communities, columns=['community'])
+    communities['node'] = adjacency.index
+    return communities
     
 if __name__ == "__main__":
     # A network with two very obvious communities:
@@ -31,8 +51,8 @@ if __name__ == "__main__":
     rows = [[0,1,1,0,0,0,0,0],
             [1,0,1,1,0,0,0,0],
             [0,1,0,0,0,0,0,0],
-            [1,1,0,0,0,0,0,0],
-            [0,0,0,1,1,1,1,0],
+            [1,0,1,0,0,0,0,0],
+            [0,0,0,1,0,1,1,0],
             [0,0,0,0,1,0,0,1],
             [0,0,0,0,0,0,0,1],
             [0,0,0,0,1,1,0,0],
@@ -42,7 +62,8 @@ if __name__ == "__main__":
     adj.index = names
     adj.columns = names
     a = clustering_c.Network(adj)
-    test_communities = pd.Series([0,0,0,0,0,0,0,0], index=names)
-    modularity = _brute_force(a, clustering_c.modularity)
-    potts = _brute_force(a, clustering_c.reichardt_bornholdt)
+#    modularity = _brute_force(a, clustering_c.modularity)
+#    potts = _brute_force(a, clustering_c.reichardt_bornholdt)
+#    clustering_c.test()
+    clustering_c.cluster(a)
     
