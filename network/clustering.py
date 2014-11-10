@@ -9,6 +9,18 @@ import pyximport; pyximport.install(reload_support=True)
 import clustering_c
 #reload(clustering_c)
 
+class Network:
+    def __init__(self, adjacency):
+        self.adjacency = adjacency
+        self.edges = adjacency[adjacency > 0].fillna(0)
+        self.indegrees = self.edges.sum()
+        self.outdegrees = self.edges.sum(1)
+        self.edge_count = self.edges.sum().sum()
+
+    def __repr__(self):
+        return str(self.adjacency)
+
+
 def _brute_force(adjacency, hessian):
     """
     Use brute force to test for every combination of two clusters
@@ -24,24 +36,23 @@ def _brute_force(adjacency, hessian):
         {str(c.values):hessian(adjacency, c.values) for c in community_lists})
     return objective.order(ascending=False)
 
-def reichardt_bornholdt(adjacency, **kwargs):
+def reichardt_bornholdt(network, **kwargs):
     """
     Produce a clustering of the network represented by the adjacency
     matrix `adjacency`.
     
     Parameters
     ----------
-    adjacency: pandas.core.frame.DataFrame
-        A DataFrame representing an adjacency matrix
+    network: clustering_c.Network
+        A Network object representing an adjacency matrix
         
     Returns
     -------
     A Series representing the community membership
     """
-    network = clustering_c.Network(adjacency)
     communities = clustering_c.cluster(network, **kwargs)
     communities = pd.DataFrame(communities, columns=['community'])
-    communities['node'] = adjacency.index
+    communities['node'] = network.adjacency.index
     return communities
     
 if __name__ == "__main__":

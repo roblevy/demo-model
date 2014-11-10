@@ -12,17 +12,6 @@ from libc.stdlib cimport rand, RAND_MAX
 from libc.math cimport floor, exp
 import cython # Need this for decorators
 
-class Network:
-    def __init__(self, adjacency):
-        self.adjacency = adjacency
-        self.edges = adjacency[adjacency > 0].fillna(0)
-        self.indegrees = self.edges.sum()
-        self.outdegrees = self.edges.sum(1)
-        self.edge_count = self.edges.sum().sum()
-
-    def __repr__(self):
-        return str(self.adjacency)
-
 # Global variables
 cdef:
     double[:, :] adjacency # Memory view
@@ -35,21 +24,21 @@ cdef:
     double[:] prob_node_in_group
 
 @cython.cdivision(True) #  Need this to stop Cython checking for div by zero
-cdef double rand_float():
+cdef double rand_float() nogil:
     """
     A random number between 0 and 1
     """
     cdef double x = rand()
     return x / <double>RAND_MAX
         
-cdef int rand_int(int n):
+cdef int rand_int(int n) nogil:
     """
     Return a random integer between 0 and (n - 1)
     """
     return <int>floor(rand_float() * n)
 
 @cython.boundscheck(False) # turn of bounds-checking for entire function
-cdef int _weighted_random_int(double[:] weights):
+cdef int _weighted_random_int(double[:] weights) nogil:
     """
     A random number between 1 and len(weights) with each
     integer, i, occuring with weight weights[i]
@@ -127,7 +116,7 @@ cdef double _adhesion_rs(long r, long s):
 
 @cython.boundscheck(False)
 @cython.cdivision(True) #  Need this to stop Cython checking for div by zero
-cdef double _adhesion_ls(long l, long s):
+cdef double _adhesion_ls(long l, long s) nogil except -1.0:
     """
     Adhesion between node l and group s
     """
@@ -161,8 +150,8 @@ cdef double _adhesion_ls(long l, long s):
 
 @cython.boundscheck(False)
 @cython.cdivision(True)
-cdef double[:] _l_update_probabilities(long l, double t,
-                                        long l_current_group, double[:] p):
+cdef int _l_update_probabilities(long l, double t,
+    long l_current_group, double[:] p) nogil except -1:
     """
     An array of probablities for node l to move to each group
     at temperature t
@@ -186,7 +175,7 @@ cdef double[:] _l_update_probabilities(long l, double t,
     # Divide each element of prob_node_in_group by the total probability
     for i in range(group_count):
         p[i] = p[i] / prob_all_groups
-    return p
+    return 1
                     
 cdef long[:] _randomise_community_membership(long n, long g):
     cdef long[:] groups = np.empty(n, dtype=long)
@@ -212,9 +201,9 @@ cdef long _sum_array(long[:] in_array):
 
 @cython.boundscheck(False)
 cdef int cluster_simulated_annealing(double start_t, double end_t, 
-                                     double t_step = 0.99) except -1:
+                                     double t_step = 0.99) nogil except -1:
     cdef:
-        long node_count = len(adjacency)
+        long node_count = adjacency.shape[0]
         long loops_at_current_t = node_count * 50
         long node, new_group
         long node_group
@@ -228,43 +217,44 @@ cdef int cluster_simulated_annealing(double start_t, double end_t,
             # Pick a random node
             node = rand_int(node_count)
             node_group = c[node] 
-            update_probabilities = _l_update_probabilities(l=node, t=t,
-                l_current_group=node_group, p=p)
-            new_group = _weighted_random_int(update_probabilities)
+            _l_update_probabilities(l=node, t=t, l_current_group=node_group, p=p)
+            new_group = _weighted_random_int(p)
             if new_group < 0:
-                print "Something's wrong: %s" % np.array(update_probabilities)
-                raise ValueError
+                return -1
             c[node] = new_group
         t *= t_step
     return 1
         
-cpdef set_globals(network, c, g=25):
+cpdef set_globals(network, c=None, int g=25):
     global adjacency, indegrees, outdegrees, total_edge_count
     global community_labels, node_count, group_count, prob_node_in_group
     # Adjacency matrix, a
     adjacency = network.adjacency.values
+    # node count
+    node_count = adjacency.shape[0]
     # in- and out-degreee vectors
     indegrees = network.indegrees.values
     outdegrees = network.outdegrees.values
     # total edge count, m
     total_edge_count = network.edge_count
-    # community labels, c
-    community_labels = c
     # group count
     group_count = g
-    # node count
-    node_count = adjacency.shape[0]
+    # community labels, c
+    if c is None:
+        community_labels = _randomise_community_membership(node_count, group_count)
+    else:
+        community_labels = c
     # probability vector for a node going into a group
     prob_node_in_group = np.ndarray(group_count)
 
-
-def modularity(adjacency, community_labels):
+def modularity(adjacency, c):
      """
      Given an Adjacency object, and a pd.Series specifying
      community labels for each element of the adjacency matrix,
      return the Leicht/Newman modularity
      """
-     set_globals(adjacency, community_labels)
+     global community_labels
+     set_globals(adjacency, c=c)
      cdef:
          np.ndarray[double,  ndim=2] a = adjacency.adjacency.values
          Py_ssize_t i, j, n = len(a)
@@ -272,7 +262,6 @@ def modularity(adjacency, community_labels):
          np.ndarray[double] k_in = adjacency.indegrees.values
          np.ndarray[double] k_out = adjacency.outdegrees.values
          np.ndarray[double] q = np.empty(n * n)
-         np.ndarray[long] c = community_labels
          int m = adjacency.edge_count
      for i in range(n):
          for j in range(n):
@@ -288,7 +277,7 @@ def reichardt_bornholdt(network, community_labels):
     
     This boils down to summing the adhesion between all groups.
     """
-    set_globals(network, community_labels)
+    set_globals(network, c=community_labels)
     cdef:
         # the Hessian
         double hessian = 0
@@ -299,13 +288,12 @@ def reichardt_bornholdt(network, community_labels):
     return hessian
 
 def cluster(network, group_count=25):
-    cdef long n = len(network.adjacency)
-    cdef long[:] c = _randomise_community_membership(n, group_count)
-    print "initial groups: %s" % np.array(c)
-    set_globals(network, c, group_count)
-    cluster_simulated_annealing(start_t=1, end_t=1e-4, t_step=0.99)
-    print "Final results:"
-    print np.array(community_labels)
+    cdef long n
+    #print "initial groups: %s" % np.array(c)
+    set_globals(network, g=group_count)
+    cluster_simulated_annealing(start_t=10, end_t=1e-4, t_step=0.99)
+    #print "Final results:"
+    #print np.array(community_labels)
     return np.array(community_labels)
     
 def test():
