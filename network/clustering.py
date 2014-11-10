@@ -72,7 +72,7 @@ if __name__ == "__main__":
     adj = pd.DataFrame(rows).astype(float)
     adj.index = names
     adj.columns = names
-    a = clustering_c.Network(adj)
+    a = Network(adj)
 #    modularity = _brute_force(a, clustering_c.modularity)
 #    potts = _brute_force(a, clustering_c.reichardt_bornholdt)
 #    clustering_c.test()

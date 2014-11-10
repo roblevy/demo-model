@@ -1,5 +1,5 @@
 # encoding: utf-8
-# cython: profile=True
+# cython: profile=False
 # filename: clustering_c.pyx
 """
 A series of clustering algorithms for use on an adjacency matrix which is
@@ -24,21 +24,21 @@ cdef:
     double[:] prob_node_in_group
 
 @cython.cdivision(True) #  Need this to stop Cython checking for div by zero
-cdef double rand_float() nogil:
+cdef double rand_float() :
     """
     A random number between 0 and 1
     """
     cdef double x = rand()
     return x / <double>RAND_MAX
         
-cdef int rand_int(int n) nogil:
+cdef int rand_int(int n) :
     """
     Return a random integer between 0 and (n - 1)
     """
     return <int>floor(rand_float() * n)
 
 @cython.boundscheck(False) # turn of bounds-checking for entire function
-cdef int _weighted_random_int(double[:] weights) nogil:
+cdef int _weighted_random_int(double[:] weights) :
     """
     A random number between 1 and len(weights) with each
     integer, i, occuring with weight weights[i]
@@ -116,7 +116,7 @@ cdef double _adhesion_rs(long r, long s):
 
 @cython.boundscheck(False)
 @cython.cdivision(True) #  Need this to stop Cython checking for div by zero
-cdef double _adhesion_ls(long l, long s) nogil except -1.0:
+cdef double _adhesion_ls(long l, long s)  except -1.0:
     """
     Adhesion between node l and group s
     """
@@ -151,7 +151,7 @@ cdef double _adhesion_ls(long l, long s) nogil except -1.0:
 @cython.boundscheck(False)
 @cython.cdivision(True)
 cdef int _l_update_probabilities(long l, double t,
-    long l_current_group, double[:] p) nogil except -1:
+    long l_current_group, double[:] p)  except -1:
     """
     An array of probablities for node l to move to each group
     at temperature t
@@ -201,7 +201,7 @@ cdef long _sum_array(long[:] in_array):
 
 @cython.boundscheck(False)
 cdef int cluster_simulated_annealing(double start_t, double end_t, 
-                                     double t_step = 0.99) nogil except -1:
+                                     double t_step = 0.99)  except -1:
     cdef:
         long node_count = adjacency.shape[0]
         long loops_at_current_t = node_count * 50
