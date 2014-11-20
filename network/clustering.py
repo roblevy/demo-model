@@ -5,12 +5,17 @@ stored in the form of a pandas DataFrame.
 
 import numpy as np
 import pandas as pd
-import pyximport; pyximport.install(reload_support=True)
+#import pyximport; pyximport.install(reload_support=True)
+import pyximport; pyximport.install()
 import clustering_c
 #reload(clustering_c)
+import multiprocessing as mp
+from functools import partial
 
 class Network:
-    def __init__(self, adjacency):
+    def __init__(self, adjacency, make_symmetric=False):
+        if make_symmetric:
+            adjacency = (adjacency + adjacency.transpose()) / 2
         self.adjacency = adjacency
         self.edges = adjacency[adjacency > 0].fillna(0)
         self.indegrees = self.edges.sum()
@@ -19,7 +24,6 @@ class Network:
 
     def __repr__(self):
         return str(self.adjacency)
-
 
 def _brute_force(adjacency, hessian):
     """
@@ -36,6 +40,62 @@ def _brute_force(adjacency, hessian):
         {str(c.values):hessian(adjacency, c.values) for c in community_lists})
     return objective.order(ascending=False)
 
+def cluster(network, gamma):
+    return reichardt_bornholdt(network, gamma=gamma, t_step=0.9)
+
+def repeated_clustering(gamma, network, iterations):
+    for i in range(iterations):
+        try:
+            res['iter%i' % i] = cluster(network, gamma).set_index('node')
+        except NameError:
+            res = cluster(network, gamma).set_index('node')
+            res = res.rename(columns={'community':'iter%i' % i})
+    res['gamma'] = round(gamma, 3)
+    return res.reset_index()
+    
+def gamma_sweep(network, iterations_per_gamma=1, gamma_range=None):
+    if gamma_range is None:
+        gamma_range = np.arange(0.1, 0.7, 0.01)
+    pool = mp.Pool()
+    _repeated_cluster = partial(repeated_clustering, 
+                      network=network, iterations=iterations_per_gamma)
+    results = pool.map(_repeated_cluster, gamma_range)
+    pool.close()
+    pool.join()
+    return pd.concat(results)
+
+def clustering_single_gamma(network, gamma, iterations):
+    res = {}
+    for i in range(iterations):
+        clusters = cluster(network, gamma)
+        res[i] = clusters.groupby('community').aggregate(';'.join)
+        try:
+            co_occur = co_occur + co_occurence(clusters)
+        except NameError:
+            co_occur = co_occurence(clusters)
+    return res, co_occur / iterations
+
+def smallest_community(df):
+    return df.apply(lambda col: col.groupby(col).count().min())
+
+def _co_occurence(col, membership):
+    return (membership == membership.ix[col.name]).squeeze()
+
+def co_occurence(membership):
+    """
+    Returns a DataFrame with the number of times the row node
+    appears in the same cluster as the column node
+    """
+    m = membership
+    n = len(m)
+    try:
+        m = m.set_index('node')
+    except:
+        pass    
+    matrix = np.zeros([n, n])
+    matrix = pd.DataFrame(matrix, columns=m.index, index=m.index)
+    return matrix.apply(_co_occurence, membership=m) * 1
+
 def reichardt_bornholdt(network, **kwargs):
     """
     Produce a clustering of the network represented by the adjacency
@@ -43,18 +103,19 @@ def reichardt_bornholdt(network, **kwargs):
     
     Parameters
     ----------
-    network: clustering_c.Network
+    network: clustering.Network
         A Network object representing an adjacency matrix
         
     Returns
     -------
     A Series representing the community membership
     """
+    clustering_c.set_globals(network, g=25)
     communities = clustering_c.cluster(network, **kwargs)
-    communities = pd.DataFrame(communities, columns=['community'])
+    communities = pd.DataFrame(np.array(communities), columns=['community'])
     communities['node'] = network.adjacency.index
     return communities
-    
+
 if __name__ == "__main__":
     # A network with two very obvious communities:
     # A, B, C, D and E, F, G, H. A single connection
@@ -64,7 +125,7 @@ if __name__ == "__main__":
             [0,1,0,0,0,0,0,0],
             [1,0,1,0,0,0,0,0],
             [0,0,0,1,0,1,1,0],
-            [0,0,0,0,1,0,0,1],
+            [0,0,0,1,1,0,0,1],#[0,0,0,0,1,0,0,1],
             [0,0,0,0,0,0,0,1],
             [0,0,0,0,1,1,0,0],
             ]
@@ -72,9 +133,12 @@ if __name__ == "__main__":
     adj = pd.DataFrame(rows).astype(float)
     adj.index = names
     adj.columns = names
-    a = Network(adj)
+    a = Network(adj, make_symmetric=True)
 #    modularity = _brute_force(a, clustering_c.modularity)
-#    potts = _brute_force(a, clustering_c.reichardt_bornholdt)
 #    clustering_c.test()
-    clustering_c.cluster(a)
+    clusters = reichardt_bornholdt(a, gamma=10)
+    print clusters.groupby('community').aggregate(';'.join)
+    
+
+    
     

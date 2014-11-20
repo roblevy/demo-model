@@ -85,7 +85,7 @@ cdef double _modularity_ij(double adjacency_ij, double indegree_i,
         delta_ci_cj = 0
     return (a_ij - _null_model(kin_i, kout_j, m)) * delta_ci_cj
 
-cdef double _cohesion_ss(long s):
+cdef double _cohesion_ss(long s, double gamma):
     """
     Cohesion of group s
     
@@ -93,10 +93,10 @@ cdef double _cohesion_ss(long s):
     where :math:`m_{rs}` is the number of edges between
     group r and group s
     """
-    return _adhesion_rs(r=s, s=s)
+    return _adhesion_rs(r=s, s=s, gamma=gamma)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
-cdef double _adhesion_rs(long r, long s):
+cdef double _adhesion_rs(long r, long s, double gamma):
     """
     Adhesion of group r with group s
     
@@ -111,18 +111,19 @@ cdef double _adhesion_rs(long r, long s):
         # adhesion_is for all i in r
         if community_labels[i] == r:
             # The i node is in group r
-            adhesion += _adhesion_ls(l=i, s=s)
+            adhesion += _adhesion_ls(l=i, s=s, gamma=gamma)
     return adhesion
 
 @cython.boundscheck(False)
 @cython.cdivision(True) #  Need this to stop Cython checking for div by zero
-cdef double _adhesion_ls(long l, long s)  except -1.0:
+cdef double _adhesion_ls(long l, long s, double gamma)  except -1.0:
     """
     Adhesion between node l and group s
     """
     cdef:
         double m_ls = 0
         double kin_s = 0
+        double kout_s = 0
         double sum_degree_s = 0 # k_i^out / (m - k_i^in)
         double[:] outd = outdegrees
         double[:] ind = indegrees
@@ -134,7 +135,8 @@ cdef double _adhesion_ls(long l, long s)  except -1.0:
     for i in range(node_count):
         if c[i] == s:
             kin_s += ind[i]
-            sum_degree_s += outd[i] / (m - ind[i])
+            kout_s += outd[i]
+            #sum_degree_s += outd[i] / (m - ind[i])
             if i != l:
                 # Node i is in group s (and is NOT node l!)
                 if a[l, i] > 0:
@@ -146,12 +148,21 @@ cdef double _adhesion_ls(long l, long s)  except -1.0:
     #print "s %s c %s" % (s, np.array(c))
     #print "ind %s" % np.array(ind)
     #print "kin_s %s m_ls %s kout_l %s kin_l %s sum_degree_s %s" % (kin_s, m_ls, kout_l, kin_l, sum_degree_s)
-    return m_ls - (kin_s * kout_l / (m - kin_l) + kin_l * sum_degree_s) / m
+
+    # Original formula all the analysis was based on:
+    #return m_ls - (kin_s * kout_l / (m - kin_l)
+        #+ kin_l * sum_degree_s) * gamma / m
+
+    # Naive undirected formula directly out of Reichardt and Bornholdt
+    # Note that if the adjacency matrix is symmetric, kin_s
+    # is the same as kout_s etc:
+    #return m_ls - (gamma / (2 * m) * kin_l * kin_s)
+    return m_ls - gamma * (kout_l * kin_s + kin_l * kout_s) / (m * m)
 
 @cython.boundscheck(False)
 @cython.cdivision(True)
 cdef int _l_update_probabilities(long l, double t,
-    long l_current_group, double[:] p)  except -1:
+    long l_current_group, double[:] p, double gamma)  except -1:
     """
     An array of probablities for node l to move to each group
     at temperature t
@@ -159,7 +170,8 @@ cdef int _l_update_probabilities(long l, double t,
     See eqns 23 and 29 in Reichardt and Bornholdt
     """
     cdef:
-        double l_current_adhesion = _adhesion_ls(l=l, s=l_current_group)
+        double l_current_adhesion = _adhesion_ls(l=l, s=l_current_group,
+            gamma=gamma)
         double prob_all_groups = 0
         float delta_H_s # Change in energy moving l to group s
         
@@ -169,7 +181,8 @@ cdef int _l_update_probabilities(long l, double t,
             delta_H_s = 0
         else:
             # Node l not already in group s
-            delta_H_s = l_current_adhesion - _adhesion_ls(l=l, s=s)
+            delta_H_s = l_current_adhesion - _adhesion_ls(l=l, s=s, 
+                gamma=gamma)
         p[s] = exp((-1 / t) * delta_H_s)
         prob_all_groups += p[s]
     # Divide each element of prob_node_in_group by the total probability
@@ -201,7 +214,8 @@ cdef long _sum_array(long[:] in_array):
 
 @cython.boundscheck(False)
 cdef int cluster_simulated_annealing(double start_t, double end_t, 
-                                     double t_step = 0.99)  except -1:
+                                     double t_step,
+                                     double gamma)  except -1:
     cdef:
         long node_count = adjacency.shape[0]
         long loops_at_current_t = node_count * 50
@@ -217,7 +231,8 @@ cdef int cluster_simulated_annealing(double start_t, double end_t,
             # Pick a random node
             node = rand_int(node_count)
             node_group = c[node] 
-            _l_update_probabilities(l=node, t=t, l_current_group=node_group, p=p)
+            _l_update_probabilities(l=node, t=t, l_current_group=node_group, 
+                                    p=p, gamma=gamma)
             new_group = _weighted_random_int(p)
             if new_group < 0:
                 return -1
@@ -269,32 +284,17 @@ def modularity(adjacency, c):
              k += 1
      return sum(q) / m
 
-def reichardt_bornholdt(network, community_labels):
-    """
-    Given a Network object, and a pd.Series specifying
-    community labels for each element of the adjacency matrix,
-    return the Reichardt/Bornholdt hessian.
-    
-    This boils down to summing the adhesion between all groups.
-    """
-    set_globals(network, c=community_labels)
-    cdef:
-        # the Hessian
-        double hessian = 0
-    # Calculate the Hessian
-    for r in range(group_count):
-        for s in range(r):
-            hessian += _adhesion_rs(r=r, s=s)
-    return hessian
-
-def cluster(network, group_count=25):
-    cdef long n
-    #print "initial groups: %s" % np.array(c)
-    set_globals(network, g=group_count)
-    cluster_simulated_annealing(start_t=10, end_t=1e-4, t_step=0.99)
+cpdef cluster(network, group_count=25, start_t=1, end_t=1e-4, t_step=0.9,
+            gamma=1):
+    cdef double t0 = start_t
+    cdef double t_end = end_t
+    cdef double tstep = t_step
+    cdef double c_gamma = gamma
+    cluster_simulated_annealing(start_t=t0, end_t=t_end, t_step=tstep,
+                                gamma=c_gamma)
     #print "Final results:"
     #print np.array(community_labels)
-    return np.array(community_labels)
+    return community_labels
     
 def test():
     pass

@@ -28,7 +28,7 @@ def write_gexf(filename, graph=None, adjacency=None, attributes=None):
     nx.write_gexf(graph, filename, prettyprint=True)
 
 #%%
-def to_graph(adjacency, attributes, normalise=True):
+def to_graph(adjacency, attributes=None, normalise=True, positive_edges=True):
     """
     Create a networkx graph object from an adjacency matrix
     """
@@ -36,12 +36,14 @@ def to_graph(adjacency, attributes, normalise=True):
     graph.add_nodes_from(adjacency.columns)
     if normalise:
         attributes = attributes.div(attributes.max())
-    # Add attributes to nodes
-    for name, node in graph.nodes_iter(data=True):
-        for attr_name in attributes.columns:
-            to_add = attributes.ix[name,attr_name]
-            node[attr_name] = denumpify(to_add)
-    links = _dataframe_to_edges(adjacency, normalise=normalise)
+    if attributes is not None:
+        # Add attributes to nodes
+        for name, node in graph.nodes_iter(data=True):
+            for attr_name in attributes.columns:
+                to_add = attributes.ix[name,attr_name]
+                node[attr_name] = denumpify(to_add)
+    links = _dataframe_to_edges(adjacency, 
+        normalise=normalise, positive_edges=positive_edges)
     graph.add_edges_from(links)
     return graph
    
@@ -52,7 +54,7 @@ def filter_edges_top_n(adjacency, n, by_outflow=False):
     return adjacency[adjacency.rank(ascending=False, 
                                     axis=(1 * by_outflow)) <= n]
 
-def _dataframe_to_edges(adjacency, normalise=True):
+def _dataframe_to_edges(adjacency, normalise=True, positive_edges=True):
     """
     Create a container of edges from an adjacency matrix
     
@@ -67,8 +69,9 @@ def _dataframe_to_edges(adjacency, normalise=True):
         values being edge weights
     """
     A = adjacency
-    # Remove all links <= 0
-    links = A.stack()[A.stack() > 0]
+    if positive_edges:
+        # Remove all links <= 0
+        links = A.stack()[A.stack() > 0]
     if normalise:
         links = links / links.abs().max()
     return [(k[0], k[1], {'weight':denumpify(v)}) 
