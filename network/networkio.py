@@ -34,9 +34,9 @@ def to_graph(adjacency, attributes=None, normalise=True, positive_edges=True):
     """
     graph = nx.DiGraph()
     graph.add_nodes_from(adjacency.columns)
-    if normalise:
-        attributes = attributes.div(attributes.max())
     if attributes is not None:
+        if normalise:
+            attributes = attributes.div(attributes.max())
         # Add attributes to nodes
         for name, node in graph.nodes_iter(data=True):
             for attr_name in attributes.columns:
