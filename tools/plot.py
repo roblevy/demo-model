@@ -1,8 +1,22 @@
 import matplotlib.pyplot as plt
-from matplotlib import cm
+import numpy as np
 
 __plot_dims__ = [12, 12] # inches
 
+def _set_fig_size(fig):
+    fig.set_figwidth(__plot_dims__[0])
+    fig.set_figheight(__plot_dims__[1])
+    
+
+def heat_map(df, cmap_name='Blues'):
+    n = len(df)
+    fig, ax = plt.subplots()
+    _set_fig_size(fig)
+    ax.imshow(df, interpolation='nearest', cmap=cmap_name)
+    ax.set_xticks(np.linspace(0, n-1, n))
+    ax.set_xticklabels(df.columns, rotation=90)
+    ax.set_yticks(np.linspace(0, n-1, n))
+    ax.set_yticklabels(df.index)
 
 def scatter_plot(df, xcol=0, ycol=1, labelled=True,
                  ymin=0, ymax=None, xmin=0, xmax=None):
@@ -21,12 +35,10 @@ def scatter_plot(df, xcol=0, ycol=1, labelled=True,
         Add labels using the index of `df`
     """
     fig, ax = plt.subplots()
-    fig.set_figwidth(__plot_dims__[0])
-    fig.set_figheight(__plot_dims__[1])
-    cmap = cm.get_cmap('Spectral')
+    _set_fig_size(fig)
     df.plot(xcol, ycol, kind='scatter',
         ax=ax, c=range(len(df)),
-        colormap=cmap, s=120, alpha=0.8,
+        colormap='Spectral', s=120, alpha=0.8,
         edgecolor='None', 
         ylim=[ymin, ymax], xlim=[xmin, xmax])
     if labelled:

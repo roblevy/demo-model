@@ -3,24 +3,16 @@
 TPOE was here (but Rob was here first)
 """
 
-from os import chdir, path
-chdir(path.dirname(__file__))
-
 import pandas as pd
 import numpy as np
 import global_demo_model
 import output_model
 
-reload(global_demo_model)
-reload(output_model)
-
 # Get fantasy data
 
-fname = ''.join([path.dirname(__file__),'/Fantasy World Data/%s.csv'])
-
-io_data = pd.read_csv(fname % 'fantasy_world_data',
+io_data = pd.read_csv('Fantasy World Data/fantasy_world_data.csv',
                       true_values='t',false_values='f')
-goods_flows = pd.read_csv(fname % 'fantasy_trade_flows',
+goods_flows = pd.read_csv('Fantasy World Data/fantasy_trade_flows.csv',
                           true_values='t',false_values='f')
                                 
 #%%
@@ -30,7 +22,7 @@ model_war = global_demo_model.GlobalDemoModel.from_data(io_data, goods_flows)
 #%%
 # Run model
 model_peace.recalculate_world()
-model_peace.to_file('fantasy_model.gdm')
+model_peace.to_pickle('../Models/fantasy_model.gdm')
 
 #%%
 # Create war
