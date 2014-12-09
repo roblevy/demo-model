@@ -1,12 +1,31 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import gaussian_kde
 
 __plot_dims__ = [12, 12] # inches
 
 def _set_fig_size(fig):
     fig.set_figwidth(__plot_dims__[0])
-    fig.set_figheight(__plot_dims__[1])
-    
+    fig.set_figheight(__plot_dims__[1])   
+
+def density_plot(df, ax=None, **kwargs):
+    """
+    Convert df to a Series and draw a Gaussian kernel density plot
+    """    
+    try:
+        df = df.stack()
+    except AttributeError:
+        pass
+    density = gaussian_kde(df)
+    xs = np.linspace(df.min(),df.max(),200)
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+    colour = next(ax._get_lines.color_cycle)
+    x_density = density(xs)
+    ax.hist(df, alpha=0.2, normed=True, color=colour)
+    ax.plot(xs,x_density, color=colour, **kwargs)
 
 def heat_map(df, cmap_name='Blues'):
     n = len(df)
