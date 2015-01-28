@@ -213,6 +213,16 @@ class Country(object):
         Calculated from the total final demand and the import ratios, D.
         """
         return self.D.dot(self.f)
+        
+    def value_added_per_unit(self):
+        """
+        Value added per unit for each sector
+        
+        Calculated by row-summing over the technical coefficients
+        """
+        va = self.A.sum(0)
+        va.index.names = ['sector']
+        return va
                  
     def _import_reqs(self, tech_coeffs, 
                      total_production, final_demand, exports,

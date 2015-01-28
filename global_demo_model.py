@@ -250,6 +250,17 @@ class GlobalDemoModel(object):
                 for c in self._countries_not_RoW()]
         return pd.concat(A, keys=self._countries_not_RoW(), 
                          names=['country'])
+                         
+    def value_added_per_unit(self):
+        """
+        Value added per unit for all countries except RoW
+        
+        Calculated using `Country.value_added_per_unit()`
+        """
+        va = [self.countries[c].value_added_per_unit()
+            for c in self._countries_not_RoW()]
+        return pd.concat(va, keys=self._countries_not_RoW(),
+                         names=['country'])
 
     def import_ratios(self):
         """

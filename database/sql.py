@@ -4,7 +4,7 @@ Created on Thu Sep 25 16:34:24 2014
 
 @author: rob
 """
-
+import numpy as np
 import pandas as pd
 import psycopg2 as pg
 from os.path import abspath
@@ -71,12 +71,11 @@ def update_df_to_database(df, tablename,
                            indexcols=indexcols, dbcols=dbcols)
     pwd = raw_input('Password for user enfolding:')
     con = get_connection(user='enfolding', password=pwd)
+    cur = con.cursor()
     for sql in queries:
-        cur = con.cursor()
         cur.execute(sql)
         con.commit()
-        cur.close()
-        print sql
+    cur.close()
     con.close()
     
 def build_update(df, tablename, indexcols, dbcols):
@@ -120,5 +119,9 @@ def type_sensitive_equals(v):
         else:
             return '"%s" = %f'
     except ValueError:
-        # v is not a number:
-        return """ "%s" = '%s'"""
+        if np.isnan(v):
+            # v is null
+            return '"%s" = NULL /*%s*/'
+        else:
+            # v is not a number and is not null:
+            return """ "%s" = '%s'"""
