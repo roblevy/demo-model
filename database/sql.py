@@ -15,6 +15,10 @@ def get_connection(user='enfoldreader', password='enfoldreader'):
         user=user,
         password=password)
 
+def get_user_connection(user='enfolding'):
+    pwd = raw_input('Password for user %s:' % user)
+    return get_connection(user=user, password=pwd)
+
 def df_from_sql(sql):
     """
     Create a dataframe from the given SQL statement.
@@ -45,8 +49,9 @@ def insert_df_to_database(df, tablename, dbcols=None):
     df = pd.DataFrame(df).reset_index()
     if dbcols is None:
         dbcols = {k:k for k in df} # iterate column names
+    con = get_user_connection('enfolding')
     pd.io.sql.to_sql(df.rename(dbcols), tablename, 
-                     get_connection(), index=False)
+                     con, index=False)
 
 def update_df_to_database(df, tablename, 
                           indexcols, dbcols):
@@ -69,8 +74,7 @@ def update_df_to_database(df, tablename,
     """
     queries = build_update(df=df, tablename=tablename,
                            indexcols=indexcols, dbcols=dbcols)
-    pwd = raw_input('Password for user enfolding:')
-    con = get_connection(user='enfolding', password=pwd)
+    con = get_user_connection('enfolding')
     cur = con.cursor()
     for sql in queries:
         cur.execute(sql)
