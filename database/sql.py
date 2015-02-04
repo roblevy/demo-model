@@ -46,12 +46,16 @@ def insert_df_to_database(df, tablename, dbcols=None):
         whose values are the names of the columns in the database to write
         each DataFrame column to.
     """
-    df = pd.DataFrame(df).reset_index()
     if dbcols is None:
         dbcols = {k:k for k in df} # iterate column names
+    sql = "INSERT INTO %s(%s) VALUES\n" % (tablename, ','.join(dbcols.keys()))
+    sql += ','.join(['(%s)' % build_values(r, dbcols) for k, r in df.iterrows()])
     con = get_user_connection('enfolding')
-    pd.io.sql.to_sql(df.rename(dbcols), tablename, 
-                     con, index=False)
+    cur = con.cursor()
+    cur.execute(sql)
+    con.commit()
+    cur.close()
+    con.close()
 
 def update_df_to_database(df, tablename, 
                           indexcols, dbcols):
@@ -92,12 +96,23 @@ def build_update(df, tablename, indexcols, dbcols):
         queries.append(sql)
     return queries
 
+def build_values(row, dbcols):
+    """
+    Turn a row of a DataFrame into a comma separated list of values,
+    correctly quotes for Postgres
+    """
+    select = ""
+    for dbcol in dbcols:
+        value = row[dbcol]
+        select += type_sensitive_quoting(value) % value + ", "
+    return select[:-2] # Remove the last comma
+
 def build_set(row, dbcols):
     set_ = " SET "
     for dbcol in dbcols:
         value = row[dbcol]
         append = type_sensitive_equals(value)
-        set_ += append % (dbcols[dbcol], row[dbcol]) + ", "
+        set_ += append % (dbcols[dbcol], value) + ", "
     return set_[:-2] # Remove the last comma
     
 def build_where(row, indexcols):
@@ -115,17 +130,20 @@ def build_where(row, indexcols):
     return where[:-5] # Remove the last " AND "
     
 def type_sensitive_equals(v):
+    return '"%s" = ' + type_sensitive_quoting(v)
+
+def type_sensitive_quoting(v):
     try:
         int_v = int(v)
         # v is coercible as a number
         if int(v) == float(v):
-            return '"%s" = %i'
+            return '%i'
         else:
-            return '"%s" = %f'
+            return '%f'
     except ValueError:
         if np.isnan(v):
             # v is null
-            return '"%s" = NULL /*%s*/'
+            return 'NULL /*%s*/'
         else:
             # v is not a number and is not null:
-            return """ "%s" = '%s'"""
+            return "'%s'"
