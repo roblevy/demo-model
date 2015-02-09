@@ -141,9 +141,12 @@ def type_sensitive_quoting(v):
         else:
             return '%f'
     except ValueError:
-        if np.isnan(v):
-            # v is null
-            return 'NULL /*%s*/'
-        else:
+        try:
+            if np.isnan(v):
+                # v is null
+                return 'NULL /*%s*/'
+        except TypeError:
             # v is not a number and is not null:
-            return "'%s'"
+            # $$ is an escape-hell free way to write strings
+            # in Postgres
+            return "$string$%s$string$"
