@@ -220,7 +220,7 @@ class Country(object):
         
         Calculated by row-summing over the technical coefficients
         """
-        va = self.A.sum(0)
+        va = 1 - self.A.sum(0)
         va.index.names = ['sector']
         return va
                  
