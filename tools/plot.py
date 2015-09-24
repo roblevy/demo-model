@@ -8,6 +8,21 @@ def _set_fig_size(fig):
     fig.set_figwidth(__plot_dims__[0])
     fig.set_figheight(__plot_dims__[1])   
 
+def heatmap(df, ax, xrotation=45):
+    """
+    A heatmap of the DataFrame `df` with columns
+    along the bottom and rows down the side
+    """
+    ax.pcolor(df, cmap=plt.cm.Greys, alpha=0.8)
+    ax.xaxis.tick_top()
+    ax.set_yticks(np.arange(df.shape[0]) + 0.5, minor=False)
+    ax.set_xticks(np.arange(df.shape[1]) + 0.5, minor=False)
+    ax.set_xticklabels(df.index, minor=False, rotation=xrotation, ha='left')
+    ax.set_yticklabels(df.columns, minor=False)
+    ax.set_xlim([0, df.shape[1] + .5])
+    ax.set_ylim([0, df.shape[0] + .5])
+    ax.invert_yaxis()
+
 def density_plot(df, ax=None, **kwargs):
     """
     Convert df to a Series and draw a Gaussian kernel density plot

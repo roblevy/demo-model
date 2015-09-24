@@ -25,9 +25,13 @@ def country_metrics(country):
         bot = 0
     return {'tva':tva, 'bot':bot}
 
-def all_metrics(model):
+def all_metrics(model, include_RoW=False):
     """
     Return a DataFrame of metrics for each country in the model
     """
-    metrics = {k: country_metrics(c) for k, c in model.countries.iteritems()}
+    if include_RoW:
+        countries = [c.name for k, c in model.countries.iteritems()]
+    else:
+        countries = model.country_names
+    metrics = {c: country_metrics(model.countries[c]) for c in countries}
     return pd.DataFrame(metrics).transpose()

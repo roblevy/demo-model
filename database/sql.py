@@ -49,13 +49,11 @@ def insert_df_to_database(df, tablename, dbcols=None):
     if dbcols is None:
         dbcols = {k:k for k in df} # iterate column names
     sql = "INSERT INTO %s(%s) VALUES\n" % (tablename, ','.join(dbcols.keys()))
-    sql += ','.join(['(%s)' % build_values(r, dbcols) for k, r in df.iterrows()])
-    con = get_user_connection('enfolding')
-    cur = con.cursor()
-    cur.execute(sql)
-    con.commit()
-    cur.close()
-    con.close()
+    sql += _build_values(df, dbcols)
+    with get_user_connection('enfolding') as con:
+        with con.cursor() as cur:
+            cur.execute(sql)
+            con.commit()
 
 def update_df_to_database(df, tablename, 
                           indexcols, dbcols):
@@ -76,36 +74,50 @@ def update_df_to_database(df, tablename,
         whose values are the names of the columns in the database to write
         each DataFrame column to.
     """
-    queries = build_update(df=df, tablename=tablename,
+    sql = build_update(df=df, tablename=tablename,
                            indexcols=indexcols, dbcols=dbcols)
-    con = get_user_connection('enfolding')
-    cur = con.cursor()
-    for sql in queries:
-        cur.execute(sql)
-        con.commit()
-    cur.close()
-    con.close()
+    with get_user_connection('enfolding') as con:
+        with con.cursor() as cur:
+            cur.execute(sql)
+            con.commit()
     
 def build_update(df, tablename, indexcols, dbcols):
+    all_cols = indexcols.copy()
+    all_cols.update(dbcols)
     df = pd.DataFrame(df).reset_index()
-    queries = []
-    for k, row in df.iterrows():
-        sql = 'UPDATE %s ' % tablename
-        sql += build_set(row, dbcols)
-        sql += build_where(row, indexcols) + ";"
-        queries.append(sql)
-    return queries
+    sql = 'update %s as to_update' % tablename
+    set_sql = 'set %s' % ', '.join(['"%s" = other."%s"' % (v, k) for k, v in dbcols.iteritems()])
+    values_sql = _build_values(df, all_cols)
+    as_sql = _build_as('other', all_cols)
+    from_sql = "from (values %s) %s" % (values_sql, as_sql)
+    where_sql = _build_update_where('to_update', 'other', indexcols)
+    return '\n'.join([sql, set_sql, from_sql, where_sql])
 
-def build_values(row, dbcols):
+def _value_row(row, columns):
     """
-    Turn a row of a DataFrame into a comma separated list of values,
-    correctly quotes for Postgres
+    Turn a DataFrame row into a string of the form (col1, col2...)
+    with the values appropriately quoted
     """
-    select = ""
-    for dbcol in dbcols:
-        value = row[dbcol]
-        select += type_sensitive_quoting(value) % value + ", "
-    return select[:-2] # Remove the last comma
+    return '(%s)' % ', '.join([type_sensitive_quoting(row[k]) % row[k] for k in columns])
+
+def _build_values(df, columns):
+    """
+    A comma separated list of `_value_row`s, one for each row of
+    `df`
+    """
+    return ',\n'.join(df.apply(_value_row, columns=columns, axis=1))
+
+def _build_as(tbl_name, columns):
+    as_string = ",".join('"%s"' % k for k in columns)
+    return "AS %s(%s)" % (tbl_name, as_string)
+
+def _build_update_where(update_tbl, values_tbl, columns):
+    """
+    return a where statement for each entry in columns
+    """
+    clauses = ['%s."%s" = %s."%s"' % (values_tbl, k, update_tbl, v) for k, v in columns.iteritems()]
+    where = ' AND '.join(clauses)
+    return "WHERE %s;" % where
 
 def build_set(row, dbcols):
     set_ = " SET "

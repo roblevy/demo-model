@@ -19,7 +19,8 @@ def estimate_services_trade_flows(data):
     then perform an iterative balancing procedure to estimate
     a flow matrix from 'data' which is a pandas DataFrame with
     total imports and exports per country/sector."""
-    data = data[pd.notnull(data.country_iso3)] #  Remove unknown areas (which ServicesTrade is full of)
+    data = data[~data.country_iso3.isnull()] #  Remove unknown areas (which ServicesTrade is full of)
+    data = data[~data.sector.isnull()] # Remove flows in unknown sectors
     sectors = data['sector'].unique()
     countries = data['country_iso3'].unique()
     # Get the flow_data    

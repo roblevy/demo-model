@@ -41,7 +41,6 @@ def create_countries_from_data(sector_flows, trade_flows):
     sector_flows = sector_flows.set_index(['country','from_sector','to_sector'])
     
     flows = sector_flows['flow_amount']
-    flows[flows < 0] = 0
     imports = flows[sector_flows['is_import']]
     final_demand = flows[sector_flows['is_final_demand'] \
         & sector_flows['from_production_sector']]
@@ -56,16 +55,18 @@ def create_countries_from_data(sector_flows, trade_flows):
     # Imports (sum across all to_sector)
     m = imports.sum(level=['country','from_sector'])
     m = rename_multiindex_level(m, 'from_sector','sector')
-    # Exports. There are some negative export demands. Set these to zero
+    # Exports.
     e = exports.sum(level=['country','from_sector'])
-    e[e < 0] = 0
     e = rename_multiindex_level(e, 'from_sector','sector')
     # Final demands. Sum across all to_sector which will be the 3 final
     # demand sectors only!
     f = final_demand.sum(level=['country','from_sector'])
     f = rename_multiindex_level(f, 'from_sector','sector')
+    f[f < 0] = 0 # Remove any negative final demands
     # Now work out the import ratios
     d = m / ((x - e) + m)
+    d[d > 1] = 1 # Make sure no import ratios are greater than 1
+    d[d < 0] = 0 # or 0
     
     # Get only those flows relevant for input-output. Since we no longer care about
     # domestic versus imported, we simply sum to get the totals
@@ -77,6 +78,7 @@ def create_countries_from_data(sector_flows, trade_flows):
 
     # Technical coefficients
     A = _get_technical_coefficients(Z, x)
+    A[A < 0] = 0 # Make sure no tech. coeffs are less than zero
     
     # Get a list of country names
     countries = sector_flows.index.levels[0].values.tolist()

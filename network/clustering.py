@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 #import pyximport; pyximport.install(reload_support=True)
 import pyximport; pyximport.install()
+import igraph
 import clustering_c
 #reload(clustering_c)
 import multiprocessing as mp
@@ -25,6 +26,19 @@ class Network:
     def __repr__(self):
         return str(self.adjacency)
 
+def _igraph_from_dataframe(df):
+    """
+    Convert an adjency matrix stored as a `pandas.DataFrame`
+    into an igraph Graph
+    """
+    if not np.alltrue(df.columns == df.index):
+        raise NameError('Column and index labels must be identical')
+    vals = df.values
+    g = igraph.Graph.Adjacency((vals > 0).tolist())
+    g.es['weight'] = vals[vals.nonzero()]
+    g.vs['label'] = df.columns.tolist()
+    return g    
+
 def _brute_force(adjacency, hessian):
     """
     Use brute force to test for every combination of two clusters
@@ -39,9 +53,6 @@ def _brute_force(adjacency, hessian):
     objective = pd.Series(
         {str(c.values):hessian(adjacency, c.values) for c in community_lists})
     return objective.order(ascending=False)
-
-def cluster(network, gamma):
-    return reichardt_bornholdt(network, gamma=gamma, t_step=0.9)
 
 def repeated_clustering(gamma, network, iterations):
     for i in range(iterations):
@@ -65,21 +76,32 @@ def gamma_sweep(network, iterations_per_gamma=1, gamma_range=None):
     return pd.concat(results)
 
 def clustering_single_gamma(network, gamma, iterations):
-    res = {}
-    for i in range(iterations):
-        clusters = cluster(network, gamma)
-        res[i] = clusters.groupby('community').aggregate(';'.join)
-        try:
-            co_occur = co_occur + co_occurence(clusters)
-        except NameError:
-            co_occur = co_occurence(clusters)
-    return res, co_occur / iterations
+    return cluster_co_occurence(reichardt_bornholdt, 
+                                network=network, gamma=gamma)    
 
+def _cluster_iteration(i, cluster_function, adjacency, **kwargs):
+    return {i: cluster_function(adjacency, **kwargs)}
+    
+def cluster_co_occurence(iterations, cluster_function, adjacency, **kwargs):
+    res = {}
+    pool = mp.Pool()
+    _cluster_fn = partial(_cluster_iteration, 
+                          cluster_function=cluster_function,
+                          adjacency=adjacency, **kwargs)
+    res = pool.map(_cluster_fn, range(iterations))
+    co_occurences = [co_occurence(x.values()[0]) for x in res]
+    for x in co_occurences:
+        try:
+            summed += x
+        except NameError:
+            summed = x
+    return co_occurences, summed / iterations
+    
 def smallest_community(df):
     return df.apply(lambda col: col.groupby(col).count().min())
 
 def _co_occurence(col, membership):
-    return (membership == membership.ix[col.name]).squeeze()
+    return (membership == membership.ix[col.name]).sum(axis=1)
 
 def co_occurence(membership):
     """
@@ -94,9 +116,9 @@ def co_occurence(membership):
         pass    
     matrix = np.zeros([n, n])
     matrix = pd.DataFrame(matrix, columns=m.index, index=m.index)
-    return matrix.apply(_co_occurence, membership=m) * 1
+    return matrix.apply(_co_occurence, membership=m)
 
-def reichardt_bornholdt(network, **kwargs):
+def reichardt_bornholdt(network, t_step=0.9, **kwargs):
     """
     Produce a clustering of the network represented by the adjacency
     matrix `adjacency`.
@@ -116,6 +138,18 @@ def reichardt_bornholdt(network, **kwargs):
     communities['node'] = network.adjacency.index
     return communities
 
+def infomap(df, **kwargs):
+    """
+    Cluster the adjacency matrix, stored as a `pandas.DataFrame`
+    using Rosvall & Bergstrom's infomap method
+    """
+    g = _igraph_from_dataframe(df)
+    member = g.community_infomap(**kwargs).membership
+    res = pd.DataFrame()
+    res['community'] = member
+    res['node'] = g.vs['label']
+    return res
+    
 if __name__ == "__main__":
     # A network with two very obvious communities:
     # A, B, C, D and E, F, G, H. A single connection

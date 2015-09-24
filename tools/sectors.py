@@ -7,42 +7,69 @@ A set of tools for the Global Demo Model relating to sectors
 import pandas as pd
 
 __sectors__  = pd.DataFrame([
-    {'name':'Food', "is_services":False, "is_manufacturing":False},
-    {'name':'Leather', "is_services":False, "is_manufacturing":False},
-    {'name':'Fuel', "is_services":False, "is_manufacturing":False},
-    {'name':'Plastics', "is_services":False, "is_manufacturing":True},
-    {'name':'Metals', "is_services":False, "is_manufacturing":True},
-    {'name':'Machinery', "is_services":False, "is_manufacturing":True},
-    {'name':'Vehicles', "is_services":False, "is_manufacturing":True},
-    {'name':'Utilities', "is_services":True, "is_manufacturing":False},
-    {'name':'Wholesale Trade', "is_services":True, "is_manufacturing":False},
-    {'name':'Hospitality', "is_services":True, "is_manufacturing":False},
-    {'name':'Air Transport', "is_services":True, "is_manufacturing":False},
-    {'name':'Communications', "is_services":True, "is_manufacturing":False},
-    {'name':'Business Services', "is_services":True, "is_manufacturing":False},
-    {'name':'Education', "is_services":True, "is_manufacturing":False},
-    {'name':'Private Households', "is_services":True, "is_manufacturing":False},
-    {'name':'Agriculture', "is_services":False, "is_manufacturing":False},
-    {'name':'Wood', "is_services":False, "is_manufacturing":True},
-    {'name':'Construction', "is_services":False, "is_manufacturing":False},
-    {'name':'Real Estate', "is_services":True, "is_manufacturing":False},
-    {'name':'Public Services', "is_services":True, "is_manufacturing":False},
-    {'name':'Health', "is_services":True, "is_manufacturing":False},
-    {'name':'Other Services', "is_services":True, "is_manufacturing":False},
-    {'name':'Minerals', "is_services":False, "is_manufacturing":False},
-    {'name':'Manufacturing', "is_services":False, "is_manufacturing":True},
-    {'name':'Vehicle Trade', "is_services":True, "is_manufacturing":False},
-    {'name':'Water Transport', "is_services":True, "is_manufacturing":False},
-    {'name':'Transport Services', "is_services":True, "is_manufacturing":False},
-    {'name':'Paper', "is_services":False, "is_manufacturing":False},
-    {'name':'Electricals', "is_services":False, "is_manufacturing":False},
-    {'name':'Textiles', "is_services":False, "is_manufacturing":True},
-    {'name':'Retail Trade', "is_services":True, "is_manufacturing":False},
-    {'name':'Inland Transport', "is_services":True, "is_manufacturing":False},
-    {'name':'Financial Services', "is_services":True, "is_manufacturing":False},
-    {'name':'Mining', "is_services":False, "is_manufacturing":False},
-    {'name':'Chemicals', "is_services":False, "is_manufacturing":True}
+    {'name':'Food', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Leather', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Fuel', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Plastics', "is_services":False, "is_manufacturing":True, "is_commodity":True},
+    {'name':'Metals', "is_services":False, "is_manufacturing":True, "is_commodity":True},
+    {'name':'Machinery', "is_services":False, "is_manufacturing":True, "is_commodity":True},
+    {'name':'Vehicles', "is_services":False, "is_manufacturing":True, "is_commodity":True},
+    {'name':'Utilities', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Wholesale Trade', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Hospitality', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Air Transport', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Communications', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Business Services', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Education', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Private Households', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Agriculture', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Wood', "is_services":False, "is_manufacturing":True, "is_commodity":True},
+    {'name':'Construction', "is_services":False, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Real Estate', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Public Services', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Health', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Other Services', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Minerals', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Manufacturing', "is_services":False, "is_manufacturing":True, "is_commodity":True},
+    {'name':'Vehicle Trade', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Water Transport', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Transport Services', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Paper', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Electricals', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Textiles', "is_services":False, "is_manufacturing":True, "is_commodity":True},
+    {'name':'Retail Trade', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Inland Transport', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Financial Services', "is_services":True, "is_manufacturing":False, "is_commodity":False},
+    {'name':'Mining', "is_services":False, "is_manufacturing":False, "is_commodity":True},
+    {'name':'Chemicals', "is_services":False, "is_manufacturing":True, "is_commodity":True}
 ])
+
+__super_sectors__ = {
+"Inland Transport":"transport", "Water Transport":"transport", "Air Transport":"transport",
+"Transport Services":"transport",
+"Agriculture":"primary", "Food":"primary", "Leather":"primary", "Paper":"primary", "Textiles":"primary",
+"Chemicals":"secondary", "Electricals":"secondary", "Plastics":"secondary",
+"Manufacturing":"secondary", "Machinery":"secondary", "Vehicles":"secondary",
+"Wood":"raw", "Mining":"raw", "Metals":"raw", "Fuel":"raw", "Minerals":"raw",
+"Vehicle Trade":"trade", "Wholesale Trade":"trade", "Retail Trade":"trade", "Real Estate":"trade",
+"Business Services":"services", "Financial Services":"services",
+"Hospitality":"services", "Private Households":"services",
+"Education":"public", "Health":"public", "Other Services":"public", "Communications":"public",
+"Construction":"public", "Public Services":"public", "Utilities":"public"
+}
+
+def manufacturing_sectors():
+    return _services_with_condition('is_manufacturing')
+
+def commodity_sectors():
+    return _services_with_condition('is_commodity')
+
+def services_sectors():
+    return _services_with_condition('is_services')
+
+def _services_with_condition(condition_name):
+    s = __sectors__
+    return s[s[condition_name]].name.tolist()
 
 def sector_is_services(sector_name):
     """
@@ -51,8 +78,7 @@ def sector_is_services(sector_name):
     Returns False if sector_name is not one of the list
     of sectors in `__sector_names__`
     """
-    s = __sectors__
-    return sector_name in s[s['is_services']].name.values
+    return _sector_is(sector_name, 'is_services')
 
 def sector_is_manufacturing(sector_name):
     """
@@ -61,6 +87,32 @@ def sector_is_manufacturing(sector_name):
     Returns False if sector_name is not one of the list
     of sectors in `__sector_names__`
     """
+    return _sector_is(sector_name, 'is_manufacturing')
+    
+def sector_is_commodity(sector_name):
+    """
+    Does `sector_name` relate to a commodity sector?
+    
+    Returns False if sector_name is not one of the list
+    of sectors in `__sector_names__`
+    """
+    return _sector_is(sector_name, 'is_commodity')
+    
+def _sector_is(sector_name, attr):
     s = __sectors__
-    return sector_name in s[s['is_manufacturing']].name.values
+    s = s[s[attr]].name.tolist()
+    try:
+      return sector_name.isin(s)
+    except AttributeError:
+      return sector_name in s
+
+def format_sector_name(sector_name):
+    """
+    A database-friendly version of `sector_name`
+
+    Puts the name into all lower case and replaces
+    whitespace with `_`
+    """
+    return sector_name.replace(' ', '_').lower()
+
     

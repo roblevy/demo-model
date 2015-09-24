@@ -10,6 +10,7 @@ import numpy as np
 import demo_model.country_setup as country_setup
 import cPickle
 from demo_model.country import Country
+from demo_model.tools import dataframe
 from import_propensities import calculate_import_propensities as get_P
 from itertools import product
 import json
@@ -360,6 +361,33 @@ class GlobalDemoModel(object):
         p_s.update(by_to_country.swaplevel(0, 1).sortlevel())
         return self.recalculate_world()
 
+    def import_propensities_from_flows(self, flows_df, inplace=False):
+        """
+        Calculate a set of import propensities from `flows_df`
+
+        The input DataFrame must be indexed with ['sector', 'from_country',
+        'to_country'].  Any ['sector', 'to_country'] combinations which sum to
+        less than 1 have the remainder assigned to RoW
+        """
+        sum_y = flows_df.groupby(level=['to_country', 'sector']).sum()
+        some_ip = dataframe.broadcast(flows_df, sum_y, binary_operator='div')
+        # Re-include any sectors dropped due to divide by zero or not included
+        # in flows_df at all:
+        all_ip = some_ip.reindex(self._import_propensities.index)
+        all_ip[all_ip.isnull()] = self._import_propensities
+        # Set from RoW propensity to 1 anywhere the total over to_country and
+        # sector is zero
+        # TODO: This doesn't work yet!
+        #sums = all_ip.groupby(level=['sector', 'to_country']).sum()
+        #fixed_ip = all_ip.unstack('from_country')
+        #fixed_ip['RoW'] = 1 - sums
+        #fixed_ip.loc[pd.IndexSlice[:, 'RoW'], 'RoW'] = 0 # Set RoW/RoW to zero
+        #fixed_ip = fixed_ip.stack()
+        #fixed_ip = fixed_ip.reorder_levels(['sector', 'from_country', 'to_country']).sortlevel()
+        if inplace:
+            self._import_propensities = all_ip
+        return all_ip
+
     def final_demand(self):
         """
         A `pandas.Series` of final demands
@@ -694,19 +722,8 @@ class GlobalDemoModel(object):
         Calculate country to country flows using
         the given flows vector and the import propensities
         """
-        # TODO: This section is a real mess, due to the fact that pandas
-        # 0.13.0 can not join two MultiIndexed series.
-        r_name = '0_y' if flows.name is None else flows.name
-        l_name = '0_x' if flows.name is None else 0
-        result = self._filter_flows(self.import_propensities(), country_names,
-                                    with_RoW=with_RoW)
-        result = result.reset_index()
-        x = pd.merge(result, 
-            flows.reset_index().rename(columns={country_field:'to_country'}), 
-            on=['sector', 'to_country'])
-        x['cc_flow_value'] = x[l_name] * x[r_name]
-        return x.set_index(['sector', 'from_country', 
-                            'to_country'])['cc_flow_value'].sortlevel()
+        ip = self._import_propensities.astype(float)
+        return dataframe.broadcast(self._import_propensities, flows)
         
     def _split_flows_by_import_ratios(self, flows, get_domestic,
                                       country_names=None):
@@ -862,42 +879,31 @@ class GlobalDemoModel(object):
         E = exports
         world_imports = M.sum(level='sector')
         world_exports = E.sum(level='sector')
-    
         return sum(np.abs(world_imports - world_exports))
     
     def _world_export_requirements(self, imports, import_propensities):
-        """ Create the matrix of export requirements, E. This is
+        """
+        Create the vector of export requirements, e. This is
         done based on the import requirements of all sectors in
-        all countries."""
+        all countries.
+        
+        This is done is rather a smart-alec way. First unstack P's `from_country` 
+        into columns then multiply each column (i.e. from_country) by M (which is
+        per sector/to_country).
+        Next sum over all the `to_country` and re-stack all the columns back
+        into an index level.
+        """
         M = imports
         P = import_propensities
-        sectors = sorted(P.index.levels[0])
-    
-        all_E = map(self._sector_export_requirements,
-                    sectors,
-                    [M.ix[s] for s in sectors],
-                    [P[s] for s in sectors])
-    
-        all_E = pd.concat(all_E, keys=sectors, names=['sector'])
-    
-        return all_E
-    
-    def _sector_export_requirements(self, sector, sector_imports,
-                                    sector_import_propensities):
-        i_s = sector_imports
-        P_s = sector_import_propensities
-        e_s = P_s.unstack().dot(i_s)
-        e_s.index.names = ['from_country']
-        return e_s.squeeze()
+        return P.unstack('from_country').mul(M, axis=0).sum(level='sector').stack()
     
     def _world_import_requirements(self, countries, exports):
         """ For each country in countries, select the correct
-        vector of exports from E and recalculate that countries
+        vector of exports and recalculate that country's
         economy on the basis of the new export demand"""
-        E = exports.swaplevel(0,1).sortlevel()
         countries = self.countries
         for c in countries:
-            countries[c].e = E.ix[c]
+            countries[c].e = exports.ix[:, c]
         all_M = map(_country_import_demand, countries.iteritems())
         all_M = pd.concat(dict(all_M), names=['to_country'])
         all_M = all_M.swaplevel(0,1).sortlevel()
@@ -1010,7 +1016,7 @@ def _relevant_flows(trade_flows, countries):
     of the RoW country later.
     Set all negative flows to zero.
     """
-    trade_flows['trade_value'][trade_flows['trade_value'] < 0] = 0    
+    trade_flows.loc[trade_flows['trade_value'] < 0, 'trade_value'] = 0    
     
     fields = ['from_iso3', 'to_iso3', 'sector', 'trade_value']
     data = trade_flows[~pd.isnull(trade_flows.sector)]

@@ -4,6 +4,9 @@ _templates/
 docs/
 *.pyc
 *.gdm
+*.ipynb
+*.csv
+*.sql
 
 Makefile
 *.bat

@@ -4,7 +4,7 @@ Created on Thu Jan 16 12:46:25 2014
 
 @author: Rob
 """
-
+import pandas as pd
 import numpy as np
 import networkx as nx
 
@@ -46,6 +46,33 @@ def to_graph(adjacency, attributes=None, normalise=True, positive_edges=True):
         normalise=normalise, positive_edges=positive_edges)
     graph.add_edges_from(links)
     return graph
+
+def to_pajek(adjacency, filename, min_flow=1e-3):
+    """
+    create a .net file according to the Pajek specification
+    
+    See http://www.mapequation.org/apps/MapGenerator.html#fileformats
+    for details.
+    """
+    if filename[-4:] != '.net':
+        filename += '.net'
+    adj = adjacency
+    flows = adj.stack().reset_index()
+    flows = flows[flows > min_flow].dropna(how='any')
+    nodes = {k:i + 1 for i, k in enumerate(adj.columns)}
+    from_col = _get_col_containing(flows, 'from')
+    to_col = _get_col_containing(flows, 'to')
+    flows['from_number'] = flows[from_col].replace(nodes)
+    flows['to_number'] = flows[to_col].replace(nodes)
+    # Now build the output file
+    out = '*Vertices %i\n' % len(nodes)
+    out += '\n'.join(['%i "%s"' % (v, k) for k, v in sorted(nodes.iteritems())])
+    out += '\n*arcs %i\n' % len(flows)
+    out += flows.to_string(columns=['from_number', 'to_number', 0],
+                           header=False, index=False)
+    with open(filename, 'w') as text_file:
+        text_file.write(out)
+    print '%s written' % filename
    
 def filter_edges_top_n(adjacency, n, by_outflow=False):
     """
@@ -53,6 +80,12 @@ def filter_edges_top_n(adjacency, n, by_outflow=False):
     """
     return adjacency[adjacency.rank(ascending=False, 
                                     axis=(1 * by_outflow)) <= n]
+
+def _get_col_containing(df, containing):
+    try:
+        return [c for c in df.columns if containing in str(c)][0]
+    except IndexError:
+        return ""
 
 def _dataframe_to_edges(adjacency, normalise=True, positive_edges=True):
     """
