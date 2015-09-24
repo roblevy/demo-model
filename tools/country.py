@@ -1,0 +1,300 @@
+#!/usr/bin/python
+# -*- coding: iso-8859-15 -*-
+import pandas as pd
+from pandas import DataFrame, Series
+
+ISO_DICT = {
+    "ABW": "Aruba",
+    "AFG": "Afghanistan",
+    "AGO": "Angola",
+    "AIA": "Anguilla",
+    "ALB": "Albania",
+    "AND": "Andorra",
+    "ANT": "Netherlands Antilles",
+    "ANTARCTICA": "Antarctica",
+    "ARE": "United Arab Emirates",
+    "ARG": "Argentina",
+    "ARM": "Armenia",
+    "ASM": "American Samoa",
+    "ATF": "French South Antarctic Territories",
+    "ATG": "Antigua and Barbuda",
+    "AUS": "Australia",
+    "AUT": "Austria",
+    "AZE": "Azerbaijan",
+    "BDI": "Burundi",
+    "BEL": "Belgium",
+    "BEN": "Benin",
+    "BES": "Bonaire",
+    "BFA": "Burkina Faso",
+    "BGD": "Bangladesh",
+    "BGR": "Bulgaria",
+    "BHR": "Bahrain",
+    "BHS": "Bahamas",
+    "BIH": "Bosnia Herzegovina",
+    "BLR": "Belarus",
+    "BLZ": "Belize",
+    "BMU": "Bermuda",
+    "BOL": "Bolivia",
+    "BRA": "Brazil",
+    "BRB": "Barbados",
+    "BRN": "Brunei Darussalam",
+    "BTN": "Bhutan",
+    "BVT": "Ile Bouvet  ",
+    "BWA": "Botswana",
+    "CAF": "Central African Republic",
+    "CAN": "Canada",
+    "CCK": "Cocos Islands",
+    "CHE": "Switzerland",
+    "CHL": "Chile",
+    "CHN": "China",
+    "CIV": "Ivory Coast",
+    "CMR": "Cameroon",
+    "COD": "DRC",
+    "COG": "Congo",
+    "COK": "Cook Islands",
+    "COL": "Colombia",
+    "COM": "Comoros",
+    "CPV": "Cape Verde",
+    "CRI": "Costa Rica",
+    "CUB": "Cuba",
+    "CUW": "Curaçao",
+    "CXR": "Christmas Islands",
+    "CYM": "Cayman Islands",
+    "CYP": "Cyprus",
+    "CZE": "Czech Republic",
+    "DEU": "Germany",
+    "DJI": "Djibouti",
+    "DMA": "Dominica",
+    "DNK": "Denmark",
+    "DOM": "Dominican Republic",
+    "DUPLICATE_BEL": "Belgium-Luxembourg",
+    "DZA": "Algeria",
+    "ECU": "Ecuador",
+    "EGY": "Egypt",
+    "ERI": "Eritrea",
+    "ESH": "Western Sahara",
+    "ESP": "Spain",
+    "EST": "Estonia",
+    "ETH": "Ethiopia",
+    "FIN": "Finland",
+    "FJI": "Fiji",
+    "FLK": "Falkland Islands (Malvinas)",
+    "FRA": "France",
+    "FRO": "Faeroe Islands",
+    "FSM": "Federated State of Micronesia",
+    "GAB": "Gabon",
+    "GBR": "UK",
+    "GEO": "Georgia",
+    "GHA": "Ghana",
+    "GIB": "Gibraltar",
+    "GIN": "Guinea",
+    "GLP": "Guadeloupe",
+    "GMB": "Gambia",
+    "GNB": "Guinea-Bissau",
+    "GNQ": "Equatorial Guinea",
+    "GRC": "Greece",
+    "GRD": "Grenada",
+    "GRL": "Greenland",
+    "GTM": "Guatemala",
+    "GUF": "French Guiana",
+    "GUM": "Guam",
+    "GUY": "Guyana",
+    "HKG": "Hong Kong",
+    "HMD": "Heard Island and McDonald Islands",
+    "HND": "Honduras",
+    "HRV": "Croatia",
+    "HTI": "Haiti",
+    "HUN": "Hungary",
+    "IDN": "Indonesia",
+    "IND": "India",
+    "IOT": "British Indian Ocean Territories",
+    "IRL": "Ireland",
+    "IRN": "Iran",
+    "IRQ": "Iraq",
+    "ISL": "Iceland",
+    "ISR": "Israel",
+    "ITA": "Italy",
+    "JAM": "Jamaica",
+    "JOR": "Jordan",
+    "JPN": "Japan",
+    "KAZ": "Kazakhstan",
+    "KEN": "Kenya",
+    "KGZ": "Kyrgyzstan",
+    "KHM": "Cambodia",
+    "KIR": "Kiribati",
+    "KNA": "Saint Kitts and Nevis",
+    "KOR": "Korea",
+    "KWT": "Kuwait",
+    "LAO": "Laos",
+    "LBN": "Lebanon",
+    "LBR": "Liberia",
+    "LBY": "Libya",
+    "LCA": "Saint Lucia",
+    "LKA": "Sri Lanka",
+    "LSO": "Lesotho",
+    "LTU": "Lithuania",
+    "LUX": "Luxembourg",
+    "LVA": "Latvia",
+    "MAC": "China:  Macao Special Administrative Region",
+    "MAF": "Saint Maarten",
+    "MAR": "Morocco",
+    "MDA": "Moldova",
+    "MDG": "Madagascar",
+    "MDV": "Maldives",
+    "MEX": "Mexico",
+    "MHL": "Marshall Islands",
+    "MKD": "The Former Yugoslav Republic of Macedonia",
+    "MLI": "Mali",
+    "MLT": "Malta",
+    "MMR": "Myanmar",
+    "MNE": "Montenegro",
+    "MNG": "Mongolia",
+    "MNP": "Northern Mariana Islands",
+    "MOZ": "Mozambique",
+    "MRT": "Mauritania",
+    "MSR": "Montserrat",
+    "MTQ": "Martinique",
+    "MUS": "Mauritius",
+    "MWI": "Malawi",
+    "MYS": "Malaysia",
+    "MYT": "Mayotte",
+    "NAM": "Namibia",
+    "NCL": "New Caledonia",
+    "NER": "Niger",
+    "NFK": "Norfolk Islands",
+    "NGA": "Nigeria",
+    "NIC": "Nicaragua",
+    "NIU": "Niue",
+    "NLD": "Netherlands",
+    "NOR": "Norway",
+    "NPL": "Nepal",
+    "NRU": "Nauru",
+    "NZL": "New Zealand",
+    "OMN": "Oman",
+    "PAK": "Pakistan",
+    "PAN": "Panama",
+    "PCN": "Pitcairn",
+    "PER": "Peru",
+    "PHL": "Philippines",
+    "PLW": "Palau",
+    "PNG": "Papua New Guinea",
+    "POL": "Poland",
+    "PRK": "Democratic People's Republic of Korea",
+    "PRT": "Portugal",
+    "PRY": "Paraguay",
+    "PSE": "Occupied Palestinian Territory",
+    "PYF": "French Polynesia",
+    "QAT": "Qatar",
+    "REU": "Réunion",
+    "ROU": "Romania",
+    "RUS": "Russia",
+    "RWA": "Rwanda",
+    "SAU": "Saudi Arabia",
+    "SCG": "Serbia and Montenegro",
+    "SDN": "Sudan",
+    "SEN": "Senegal",
+    "SGP": "Singapore",
+    "SGS": "South Georgia and the South Sandwich Islands",
+    "SHN": "Saint Helena",
+    "SLB": "Solomon Islands",
+    "SLE": "Sierra Leone",
+    "SLV": "El Salvador",
+    "SMR": "San Marino",
+    "SOM": "Somalia",
+    "SPM": "Saint Pierre and Miquelon",
+    "SRB": "Serbia",
+    "SSD": "South Sudan",
+    "STP": "Sao Tome and Principe",
+    "SUR": "Suriname",
+    "SVK": "Slovakia",
+    "SVN": "Slovenia",
+    "SWE": "Sweden",
+    "SWZ": "Swaziland",
+    "SYC": "Seychelles",
+    "SYR": "Syria",
+    "TCA": "Turks and Caicos Islands",
+    "TCD": "Chad",
+    "TGO": "Togo",
+    "THA": "Thailand",
+    "TJK": "Tajikistan",
+    "TKL": "Tokelau",
+    "TKM": "Turkmenistan",
+    "TMP": "Timor-Leste",
+    "TON": "Tonga",
+    "TTO": "Trinidad and Tobago",
+    "TUN": "Tunisia",
+    "TUR": "Turkey",
+    "TUV": "Tuvalu",
+    "TZA": "Tanzania",
+    "UGA": "Uganda",
+    "UKR": "Ukraine",
+    "UMI": "United States Minor Outlying Islands",
+    "URY": "Uruguay",
+    #"USA": "USA",
+    "UZB": "Uzbekistan",
+    "VAT": "Holy See (Vatican City State)",
+    "VCT": "Saint Vincent and the Grenadines",
+    "VEN": "Venezuela",
+    "VGB": "British Virgin Islands",
+    "VNM": "Vietnam",
+    "VUT": "Vanuatu",
+    "WLD": "World",
+    "WLF": "Wallis and Futuna Islands",
+    "WSM": "Samoa",
+    "YEM": "Yemen",
+    "ZAF": "South Africa",
+    "ZMB": "Zambia",
+    "ZWE": "Zimbabwe",
+}
+
+def _replace_iso3(iso3):
+    """
+    Return the country name if `iso3` is in ISO_DICT, otherwise
+    return `iso3` itself
+    """
+    try:
+        return ISO_DICT[iso3]
+    except KeyError:
+        return iso3
+
+def _replace_series(series):
+    try:
+        return series.replace(ISO_DICT)
+    except TypeError:
+        return series
+
+def replace_iso3(df_or_list, column_name=None, index=False):
+    """
+    Replace ISO3 codes with country names
+
+    Operates on the column in `column_name` (if `df` is a DataFrame)
+    or the values if `df` is a Series.
+
+    If `index` is True, ignores `column_name` and replaces
+    values in the index instead.
+    """
+    if isinstance(df_or_list, (DataFrame, Series)):
+        df = df_or_list
+        ignore_column = ((column_name is None) or 
+            (isinstance(df, Series)) or
+            index)
+        if ignore_column:
+            if index:
+                out_df = df.copy()
+                idx_names = df.index.names
+                return replace_iso3(df.reset_index(), column_name=idx_names).set_index(idx_names).squeeze()
+            else:
+                try:
+                    return df.replace(ISO_DICT)
+                except TypeError:
+                    # df may just be a string
+                    return _replace_iso3(df)
+        else:
+            if isinstance(column_name, basestring):
+                replace_dict = {column_name: ISO_DICT}
+            else:
+                replace_dict = {k: ISO_DICT for k in column_name}
+            retval =  pd.concat([_replace_series(df[col]) for col in df], axis=1)
+            return retval
+    else:
+        return [_replace_iso3(x) for x in df_or_list]
