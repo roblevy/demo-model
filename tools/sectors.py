@@ -5,6 +5,7 @@ A set of tools for the Global Demo Model relating to sectors
 """
 
 import pandas as pd
+from demo_model.tools import dataframe
 
 __sectors__  = pd.DataFrame([
     {'name':'Food', "is_services":False, "is_manufacturing":False, "is_commodity":True},
@@ -115,4 +116,13 @@ def format_sector_name(sector_name):
     """
     return sector_name.replace(' ', '_').lower()
 
+def aggregate_to_supersectors(series, level_name='sector'):
+    """
+    Sum values of `series` across the `level_name` index level
+    according to super sector
+    """
+    idx_vals = series.index.get_level_values(level_name)
+    new_idx = [__super_sectors__[s] for s in idx_vals]
+    temp = dataframe.set_index_values(series, new_idx, level_name)
+    return temp.groupby(level=temp.index.names).sum()
     

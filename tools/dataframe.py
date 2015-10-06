@@ -72,3 +72,48 @@ def is_in_index(df, to_match, level=None):
         to_match = [to_match]
     mask = [df.index.get_level_values(x).isin(to_match) for x in level]
     return np.bitwise_or(*mask)
+
+def filter_pandas(x, filter_on, filter_by, exclude=False):
+    """
+    Filter a pd.Generic x by `filter_by` on the 
+    MultiIndex level or column `filter_on`.
+    
+    If `exclude` include everything except `filter_by`. Uses
+    `pd.Index.get_level_values()` in the background
+    """
+    if filter_by is None:
+        return x
+    if isinstance(x, pd.Series) or isinstance(x, pd.DataFrame):
+        index = _filter_mask(x, filter_on, filter_by, exclude)
+        return x[index]
+    else:
+        raise TypeError("Not a pandas object")
+
+def _filter_mask(x, filter_on, filter_by, exclude):
+    if isinstance(filter_on, (list, tuple)):
+        masks = [_filter_mask(x, field, filter_by, exclude) for field in filter_on]
+        return np.logical_and(*masks)
+
+    if isinstance(filter_by, basestring):
+        filter_by = [filter_by]
+    try:
+        index = x.index.get_level_values(filter_on).isin(filter_by)
+    except KeyError:
+        index = x[filter_on].isin(filter_by)
+    if exclude:
+        index = ~index
+    return index
+
+def set_index_values(df_or_series, new_values, level):
+    """
+    Replace the MultiIndex level `level` with `new_values`
+
+    `new_values` must be the same length as `df_or_series`
+    """
+    # TODO Improve how this works
+    levels = df_or_series.index.names
+    retval = df_or_series.reset_index(level)
+    retval[level] = new_values
+    retval = retval.set_index(level, append=True).reorder_levels(levels).sortlevel().squeeze()
+    return retval
+

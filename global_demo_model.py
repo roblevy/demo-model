@@ -599,8 +599,8 @@ class GlobalDemoModel(object):
         fd_flows = fd_flows.set_index(['from_sector','to_sector'], 
                                       append=True).squeeze().sortlevel()
         # Now return only those flows asked for
-        fd_flows = self._filter_flows(fd_flows, country_names, 
-                                      sectors, with_RoW=with_RoW)
+        fd_flows = self._filter_flows(fd_flows, from_country=country_names, to_country=country_names,
+                                      sectors=sectors, with_RoW=with_RoW)
         return fd_flows
 
     def _domestic_flows_to_foreign_format(self, flows):
@@ -661,23 +661,28 @@ class GlobalDemoModel(object):
         return pd.concat(d, keys=self._countries_not_RoW(), 
                          names=['country'])
         
-    def trade_flows(self, country_names=None, sectors=None, with_RoW=False):
+    def trade_flows(self, from_country=None, to_country=None, sector=None, with_RoW=False):
         """
         Per-sector country-country flows.
         
         Calculated from the global import vector and the 
-        import propensities
+        import propensities. Use `from_country`, `to_country` and `sector` to filter
         """
-        imports = self._filter_flows(
-            self.imports, country_names, sectors, with_RoW=with_RoW)
-        return self._split_flows_by_import_propensities(
-            imports, country_field='to_country', 
-            country_names=country_names, with_RoW=with_RoW)
+        imports = self.imports
+        imports = dataframe.filter_pandas(imports, 'sector', sector)
+        imports = dataframe.filter_pandas(imports, 'to_country', to_country)
+        flows = self._split_flows_by_import_propensities(
+            imports, country_field='to_country', with_RoW=with_RoW)
+        flows = dataframe.filter_pandas(flows, 'from_country', from_country)
+        if not with_RoW:
+            flows = dataframe.filter_pandas(flows, ['from_country', 'to_country'], 'RoW', exclude=True)
+        flows.name = 'value'
+        return flows
 
-    def _filter_flows(self, flows, country_names=None, sectors=None,
+    def _filter_flows(self, flows, from_country=None, to_country=None, sector=None,
                       with_RoW=False):
         """
-        Filter a MultiIndexed pandas object by `country_names` and
+        Filter a MultiIndexed pandas object by `from_country`, `to_country` and
         `sectors`.
         
         Both `country_names` and `sectors` can be None, a string or a
@@ -708,9 +713,9 @@ class GlobalDemoModel(object):
                 if str(l).find('country') >= 0]
             
             for level in sector_levels:
-                filtered = self._filter_series(filtered, level, sectors)
+                filtered = dataframe.filter_pandas(filtered, level, sectors)
             for level in country_levels:
-                filtered = self._filter_series(filtered, level, country_names)
+                filtered = dataframe.filter_pandas(filtered, level, country_names)
                 
             return filtered
 
@@ -733,7 +738,7 @@ class GlobalDemoModel(object):
         """
         # TODO: This section is a real mess, due to the fact that pandas
         # 0.13.0 can not join two MultiIndexed series.
-        d = self._filter_flows(self.import_ratios(), country_names)
+        d = self._filter_flows(self.import_ratios(), from_country=country_names, to_country=country_names)
         d = 1 - d if get_domestic else d
         return flows.mul(d, fill_value=0)
         
@@ -930,23 +935,6 @@ class GlobalDemoModel(object):
         else:
             return {v:k for k, v in enumerate(sorted_args[0])}
         
-    def _filter_series(self, x, filter_on, filter_by):
-        """
-        Filter a pd.Generic x by `filter_by` on the 
-        MultiIndex level or column `filter_on`.
-        
-        Uses `pd.Index.get_level_values()` in the background
-        """
-        if isinstance(x, pd.Series) or isinstance(x, pd.DataFrame):
-            if type(filter_by) is str:
-                filter_by = [filter_by]
-            try:
-                index = x.index.get_level_values(filter_on).isin(filter_by)
-            except:
-                index = x[filter_on].isin(filter_by)
-            return x[index]
-        else:
-            print "Not a pandas object"
         
     def _append_or_set(self, x, to_append):
          try:
