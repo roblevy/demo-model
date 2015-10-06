@@ -126,3 +126,13 @@ def aggregate_to_supersectors(series, level_name='sector'):
     temp = dataframe.set_index_values(series, new_idx, level_name)
     return temp.groupby(level=temp.index.names).sum()
     
+def sectors_from_supersector(supersector):
+    """
+    A list of sectors matching `supersector`
+
+    `supersector` is either a string or a list of strings
+    """
+    if isinstance(supersector, basestring):
+        supersector = [supersector]
+    return [k for k, v in __super_sectors__.iteritems() if v in supersector]
+    

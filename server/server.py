@@ -8,6 +8,7 @@ from functools import update_wrapper
 import pandas as pd
 from demo_model.global_demo_model import GlobalDemoModel as gdm
 from demo_model.tools import sectors, dataframe, metrics
+import demo_model.trademodels.exportness as exportness
 import json
 #from flask_cors import cross_origin
 import time
@@ -15,8 +16,9 @@ import StringIO
 
 app = Flask(__name__)
 model = None
-debug = True # Enables auto-restart when this file is saved
+debug = False # Enables auto-restart when this file is saved
 MODEL_PATH = '../../Models/'
+DATA_PATH = '../../regression/'
 SECTOR_ID = {
     'all':0,
     'primary':1,
@@ -28,16 +30,26 @@ SECTOR_ID = {
     'public':7
 }
     
-def load_model(model_file='model2010.gdm', model_path=None):
+def load_model(model_file='model2005_estimates.gdm', model_path=None,
+        regression_file='exportness_regression.csv', regression_path=None):
     """
     Load a model from a specified pickle and stored in
     global variable `model`.
     If no model_path is specified, reverts to MODEL_PATH
     """
-    global model
+    global model, exportness
+    print "Loading model..."
     if model_path is None:
         model_path = MODEL_PATH
+    if regression_path is None:
+        regression_path = DATA_PATH
     model = gdm.from_pickle(model_path + model_file)
+    print "Initialising..."
+    model = exportness.initialise_model_with_exportness(model, regression_path + regression_file)
+    model.original_exportness = model.exportness.copy()
+    model.original_import_propensities = model._import_propensities.copy()
+    print "Model loaded"
+    return model
 
 def response(response_text):
     r = make_response(response_text)
@@ -91,7 +103,13 @@ def change_model():
     print "model change requested"
     form = dict_from_multidict(request.form)
     print_args(form)
-    change_type = form.get('change_type')
+    return route_change_request(form)
+
+def route_change_request(form):
+    """
+    `form` is a dict of POST key/value pairs
+    """
+    change_type = form['change_type']
     if str(change_type) == "1":
         change_export_attractiveness(**form)
     elif str(change_type) == "2":
@@ -119,6 +137,59 @@ def change_export_attractiveness(country1, slider_value, sector_id=None, **kwarg
     """
     print "Changing export attractiveness"
     print "country: %s, value: %s, sector: %s" % (country1, slider_value, sector_id)
+    model.exportness[country1] = new_exportness(model, country1, slider_value)
+    replace_import_propensities(model, sector_id)
+    print "Recalculating world..."
+    model.recalculate_world()
+    return "ok"
+
+def new_exportness(model, country1, slider_value):
+    """
+    Split the difference between current exportness of `country1` and the 
+    min and max values across `model`
+    """
+    slider_value = float(slider_value)
+    min_exportness = model.exportness.min()
+    max_exportness = model.exportness.max()
+    current_exportness = model.exportness[country1]
+    if slider_value > 0:
+        endpoint = max_exportness
+    elif slider_value < 0:
+        endpoint = min_exportness
+    else:
+        endpoint = current_exportness
+    return current_exportness + ((endpoint - current_exportness) * slider_value)
+
+def replace_import_propensities(model, sector_id):
+    """
+    Replace either all import propensities or just those relating to `sector_id`
+
+    Uses `model.exportness`. `sector_id` is either a single integer or a list of integers.
+    """
+    new_import_propensities = exportness.estimate_import_propensities(exportness=model.exportness)
+    if sector_id is None:
+        model._import_propensities = new_import_propensities
+    else:
+        sectors = sector_names_from_id(sector_id)
+        for s in sectors:
+            model._import_propensities[s] = new_import_propensities[s]
+
+def sector_names_from_id(sector_id, get_supersectors=False):
+    """
+    A list of sector names (either supersectors or normal sectors) given a sector id
+    or list of sector_ids.
+    """
+    if sector_id is None:
+        supersectors = SECTOR_ID.keys()
+    else:
+        if not isinstance(sector_id, (list, tuple)):
+            sector_id = [int(sector_id)]
+        sector_id = [int(sid) for sid in sector_id]
+        supersectors = [k for k, v in SECTOR_ID.iteritems() if v in sector_id]
+    if get_supersectors:
+        return supersectors
+    else:
+        return sectors.sectors_from_supersector(supersectors)
 
 def change_trade_relationship(country1, country2, slider_value, sector_id=None, **kwargs):
     """
