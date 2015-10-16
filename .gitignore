@@ -3,7 +3,6 @@ _static/
 _templates/
 docs/
 *.pyc
-*.gdm
 *.ipynb
 *.csv
 *.sql
@@ -12,7 +11,6 @@ Makefile
 *.bat
 *.net
 *.json
-*.gdm
 *.spyder*
 
 # Byte-compiled / optimized / DLL files
