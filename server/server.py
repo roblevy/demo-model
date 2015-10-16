@@ -10,15 +10,16 @@ from demo_model.global_demo_model import GlobalDemoModel as gdm
 from demo_model.tools import sectors, dataframe, metrics
 import demo_model.trademodels.exportness as exportness
 import json
-#from flask_cors import cross_origin
 import time
 import StringIO
+import os
 
 app = Flask(__name__)
 model = None
-debug = False # Enables auto-restart when this file is saved
-MODEL_PATH = '../../Models/'
-DATA_PATH = '../../regression/'
+DEBUG = False # Enables auto-restart when this file is saved
+CURRENT_PATH = os.path.dirname(__file__)
+MODEL_PATH = os.path.join(CURRENT_PATH, '..', 'models/')
+RESOURCE_PATH = os.path.join(CURRENT_PATH, '..', 'resources/')
 SECTOR_ID = {
     'all':0,
     'primary':1,
@@ -42,7 +43,7 @@ def load_model(model_file='model2005_estimates.gdm', model_path=None,
     if model_path is None:
         model_path = MODEL_PATH
     if regression_path is None:
-        regression_path = DATA_PATH
+        regression_path = RESOURCE_PATH
     model = gdm.from_pickle(model_path + model_file)
     print "Initialising..."
     model = exportness.initialise_model_with_exportness(model, regression_path + regression_file)
@@ -237,5 +238,5 @@ def replace_sectors_with_ids(df_or_series, level='sector'):
 
 if __name__ == "__main__":
     load_model()
-    app.run(debug=debug, host='0.0.0.0')
+    app.run(debug=DEBUG, host='0.0.0.0')
 
