@@ -6,9 +6,9 @@ from demo_model.global_demo_model import GlobalDemoModel as gdm
 from demo_model.tools import sectors
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-model_path = SCRIPT_DIR + '/../../Models/'
-data_path = SCRIPT_DIR + '/../../Data/200 Countries/'
-services_path = SCRIPT_DIR + '/../../Data/services/'
+model_path = os.path.join(SCRIPT_DIR, '..', 'models/')
+data_path = os.path.join(SCRIPT_DIR, '..', 'resources/')
+services_path = data_path
 
 def augmented_flows(model, add_zeros=False):
     """
