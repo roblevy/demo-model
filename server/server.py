@@ -236,7 +236,10 @@ def replace_sectors_with_ids(df_or_series, level='sector'):
     retval = dataframe.set_index_values(df_or_series, new_vals, level)
     return retval
 
-if __name__ == "__main__":
+def start_server():
     load_model()
     app.run(debug=DEBUG, host='0.0.0.0')
+
+if __name__ == "__main__":
+    start_server()
 
