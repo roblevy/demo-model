@@ -16,7 +16,7 @@ import os
 
 app = Flask(__name__)
 model = None
-DEBUG = False # Enables auto-restart when this file is saved
+DEBUG = True # Enables auto-restart when this file is saved
 CURRENT_PATH = os.path.dirname(__file__)
 MODEL_PATH = os.path.join(CURRENT_PATH, '..', 'models/')
 RESOURCE_PATH = os.path.join(CURRENT_PATH, '..', 'resources/')
