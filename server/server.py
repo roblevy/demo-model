@@ -4,6 +4,7 @@ POST and GET requests, and respond with CSV data summarising
 the state of a model following the requested changes.
 """
 from flask import Flask, render_template, request, make_response
+from flask.ext.cors import CORS
 from functools import update_wrapper
 import pandas as pd
 from demo_model.global_demo_model import GlobalDemoModel as gdm
@@ -15,6 +16,7 @@ import StringIO
 import os
 
 app = Flask(__name__)
+CORS(app) # enable cors for all routes
 model = None
 DEBUG = True # Enables auto-restart when this file is saved
 CURRENT_PATH = os.path.dirname(__file__)
