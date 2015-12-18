@@ -4,6 +4,7 @@ POST and GET requests, and respond with CSV data summarising
 the state of a model following the requested changes.
 """
 from flask import Flask, render_template, request, make_response
+from flask.ext.cors import CORS
 from functools import update_wrapper
 import pandas as pd
 from demo_model.global_demo_model import GlobalDemoModel as gdm
@@ -15,6 +16,7 @@ import StringIO
 import os
 
 app = Flask(__name__)
+CORS(app) # enable cors for all routes
 model = None
 DEBUG = True # Enables auto-restart when this file is saved
 CURRENT_PATH = os.path.dirname(__file__)
@@ -30,7 +32,7 @@ SECTOR_ID = {
     'transport':6,
     'public':7
 }
-    
+
 def load_model(model_file='model2005_estimates.gdm', model_path=None,
         regression_file='exportness_regression.csv', regression_path=None):
     """
@@ -55,25 +57,25 @@ def load_model(model_file='model2005_estimates.gdm', model_path=None,
 def response(response_text):
     r = make_response(response_text)
     #r.headers['Access-Control-Allow-Origin'] = '*'
-    #r.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"  
-    #r.headers["Access-Control-Max-Age"] = "1000"  
-    #r.headers["Access-Control-Allow-Headers"] = "*"  
+    #r.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+    #r.headers["Access-Control-Max-Age"] = "1000"
+    #r.headers["Access-Control-Allow-Headers"] = "*"
     return r
 
 def print_args(args):
     print args
-    
+
 @app.route('/')
 def show_index():
     return "Model year: %s" % str(model.year)
     #return response(render_template('index.html'))
 
-@app.route('/reset', methods=['GET'])
+@app.route('/reset', methods=['POST'])
 def reset_model():
     print "Model is being reset..."
     load_model()
     print "Model reset."
-    return "Model reset at %s" % time.ctime()
+    return json_status("Model reset at %s" % time.ctime())
 
 @app.route('/flows', methods=['GET'])
 def get_flows():
@@ -116,8 +118,11 @@ def route_change_request(form):
     elif str(change_type) == "2":
         change_trade_relationship(**form)
     else:
-        return "error"
-    return "ok"
+        return json_status("error")
+    return json_status("ok")
+
+def json_status(status):
+    return json.dumps({"status":status})
 
 def gdp_dataframe(countries):
     """
@@ -142,11 +147,11 @@ def change_export_attractiveness(country1, slider_value, sector_id=None, **kwarg
     replace_import_propensities(model, sector_id)
     print "Recalculating world..."
     model.recalculate_world()
-    return "ok"
+    return json_status("ok")
 
 def new_exportness(model, country1, slider_value):
     """
-    Split the difference between current exportness of `country1` and the 
+    Split the difference between current exportness of `country1` and the
     min and max values across `model`
     """
     slider_value = float(slider_value)
