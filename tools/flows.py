@@ -61,7 +61,8 @@ def augmented_flows(model, add_zeros=False):
     df['p_ijs'] = df.y_ijs / df.m_js
 
     # x_is
-    x_is = pd.DataFrame(model.total_production(), columns=[['x_is']])
+    x_is = pd.DataFrame(model.total_production())
+    x_is = x_is.rename(columns={'x':'x_is'})
     df = pd.merge(df, x_is, how='inner',
         left_on=['from_country', 'sector'], right_index=True)
 
@@ -71,7 +72,8 @@ def augmented_flows(model, add_zeros=False):
                 left_on=['from_country'], right_index=True)
 
     # x_j
-    x_j = pd.DataFrame(model.total_production(), columns=[['x_j']])
+    x_j = pd.DataFrame(model.total_production())
+    x_j = x_j.rename(columns={'x':'x_j'})
     x_j = x_j.groupby(level='country').sum()
     df = pd.merge(df, x_j, how='inner',
 	        left_on=['to_country'], right_index=True)

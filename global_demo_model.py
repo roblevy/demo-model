@@ -240,8 +240,10 @@ class GlobalDemoModel(object):
         total production,x, for all countries (except RoW) in all sectors
         """
         x = [self.countries[c].x for c in self._countries_not_RoW()]
-        return pd.concat(x, keys=self._countries_not_RoW(), 
+        x = pd.concat(x, keys=self._countries_not_RoW(), 
                          names=['country'])
+        x.name = 'x'
+        return x
 
     def technical_coefficients(self):
         """
@@ -249,9 +251,22 @@ class GlobalDemoModel(object):
         """
         A = [self.countries[c].A.unstack().reorder_levels([1, 0]) \
                 for c in self._countries_not_RoW()]
-        return pd.concat(A, keys=self._countries_not_RoW(), 
+        A = pd.concat(A, keys=self._countries_not_RoW(), 
                          names=['country'])
-                         
+        A.name = 'a'
+        return A
+
+    def import_ratios(self):
+        """
+        Import ratios for all countries except RoW
+        """
+        d = {c:self.countries[c].d for c in self._countries_not_RoW()}
+        d = pd.DataFrame(d)
+        d.columns.name = 'country'
+        d = d.stack().swaplevel(0, 1).sortlevel()
+        d.name = 'd'
+        return d
+        
     def value_added_per_unit(self):
         """
         Value added per unit for all countries except RoW
@@ -261,25 +276,6 @@ class GlobalDemoModel(object):
         va = [self.countries[c].value_added_per_unit()
             for c in self._countries_not_RoW()]
         return pd.concat(va, keys=self._countries_not_RoW(),
-                         names=['country'])
-
-    def import_ratios(self):
-        """
-        get import ratios from each country in the model
-
-        
-        Parameters
-        ----------
-        as_matrix : boolean
-            Return diagonalised D matrices, or simple d vectors?
-
-        Returns
-        -------
-        pd.Series
-        """
-        d = [self.countries[c].d \
-                for c in self._countries_not_RoW()]
-        return pd.concat(d, keys=self._countries_not_RoW(), 
                          names=['country'])
 
     def _countries_not_RoW(self, names=None):
@@ -560,11 +556,14 @@ class GlobalDemoModel(object):
                 'index_from':index_from, 'index_to':index_to} 
         
     def all_flows(self, country_names=None, sectors=None):
+        """
+        Combines all WIOT flows, that is cs_cs_flows, domestic (IO) flows and
+        flows to final demand, into a single DataFrame
+        """
         trade_flows = self._cs_cs_flows(country_names, sectors)
-        domestic_flows = self._domestic_flows_to_foreign_format(
-            self._io_flows(country_names, sectors))
+        domestic_flows = self._domestic_flows_to_foreign_format(self._io_flows(country_names, sectors))
         trade_flows.update(domestic_flows)
-        fd_flows = self._flows_to_final_demand(country_names, sectors)
+        fd_flows = self._flows_to_final_demand(country_names, sectors, with_RoW=True)
         return pd.concat([trade_flows, fd_flows]).sortlevel()
 
     def _flows_to_final_demand(self, country_names=None, sectors=None,
@@ -586,9 +585,7 @@ class GlobalDemoModel(object):
         foreign = self._split_flows_by_import_ratios(fd, get_domestic=False)
         domestic = self._split_flows_by_import_ratios(fd, get_domestic=True)
         # Split the foreign flows by from_country using import propensities
-        fd_flows = \
-            self._split_flows_by_import_propensities(
-                foreign, 'country', with_RoW=with_RoW)
+        fd_flows = self._split_flows_by_import_propensities(foreign, 'country', with_RoW=with_RoW)
         domestic_flows = self._domestic_flows_to_foreign_format(
             domestic)
         # Combine the two into a single Series
@@ -599,7 +596,7 @@ class GlobalDemoModel(object):
         fd_flows = fd_flows.set_index(['from_sector','to_sector'], 
                                       append=True).squeeze().sortlevel()
         # Now return only those flows asked for
-        fd_flows = self._filter_flows(fd_flows, from_country=country_names, to_country=country_names,
+        fd_flows = self._filter_flows(fd_flows, country_names=country_names,
                                       sectors=sectors, with_RoW=with_RoW)
         return fd_flows
 
@@ -625,41 +622,36 @@ class GlobalDemoModel(object):
         Calculate country-sector to country-sector flows using
         country-country flows, the import ratios and the technical
         coefficients
+
+        y_ijrs = p_ijr * d_jr * a_jrs * x_js
         """
-        cc_flows = self.trade_flows(country_names, sectors).reset_index()
-        # TODO: This section is a real mess, due to the fact that pandas
-        # 0.13.0 can not join two MultiIndexed series.
-        import_ratios = self.import_ratios().reset_index()
-        import_ratios = import_ratios.rename(
-            columns={'country':'to_country', 0: 'd'})
-        # TODO: This is wrong at the moment. Need to separate
-        # off the part which satisfies final demand before doing this!
-        tech_coeffs = self.technical_coefficients().reset_index()
-        tech_coeffs = tech_coeffs.rename(
-            columns={'country':'to_country', 0: 'a'})
-        
-        exports = self.exports.reset_index()
-        exports = exports.rename(
-            columns={'from_country':'to_country', 0: 'e'})
-            
-        x = pd.merge(cc_flows, import_ratios, on=['to_country', 'sector'])
-        x = pd.merge(x, exports, on=['to_country', 'sector'])
-        x = x.rename(columns={'sector':'from_sector'})
-        x = pd.merge(x, tech_coeffs, on=['to_country', 'from_sector'])
-        x = x.set_index(['from_country', 'to_country', 
-                         'from_sector', 'to_sector']).sortlevel()
-         
-        x['flow_value'] = ((1 / (1 - x.d)) * x.cc_flow_value + x.e ) * x.a
-        return x['flow_value'].squeeze().sortlevel()
+        x = self.total_production()
+        a = self.technical_coefficients()
+        d = self.import_ratios()
+        p = self.import_propensities()
+        # Rename various index levels
+        x = dataframe.rename_index_level(x, {'country':'to_country', 'sector':'to_sector'})
+        a = dataframe.rename_index_level(a, {'country':'to_country'})
+        d = dataframe.rename_index_level(d, {'country':'to_country', 'sector':'from_sector'})
+        p = dataframe.rename_index_level(p, {'sector':'from_sector'})
+        # d * a * x is easy to deal with since it's all within country j
+        broadcast = dataframe.broadcast
+        dax = broadcast(broadcast(a, x), d)
+        dax.name = 'dax'
+        # pdax: this is a little more complicated since p doesn't know about s, 
+        #       and dax doesn't know about i
+        p.name = 'p'
+        pdax = pd.merge(dax.reset_index(), p.reset_index())
+        pdax = pdax.set_index(['from_country', 'to_country', 'from_sector', 'to_sector']).sortlevel()
+        y_ijrs = pdax.dax * pdax.p
+        y_ijrs.name = 'cs_cs_flow'
+        return y_ijrs
             
     def _io_flows(self, country_names=None, sectors=None):
         if country_names is None:
             country_names = self._countries_not_RoW()
-        d = [self._filter_flows(self.countries[c].Z_dagger().stack(), 
-                                sectors=sectors) \
-             for c in country_names]
-        return pd.concat(d, keys=self._countries_not_RoW(), 
-                         names=['country'])
+        d = [self._filter_flows(self.countries[c].Z_dagger().stack(), sectors=sectors) for c in country_names]
+        return pd.concat(d, keys=self._countries_not_RoW(), names=['country'])
         
     def trade_flows(self, from_country=None, to_country=None, sector=None, with_RoW=False):
         """
@@ -679,14 +671,16 @@ class GlobalDemoModel(object):
         flows.name = 'value'
         return flows
 
-    def _filter_flows(self, flows, from_country=None, to_country=None, sector=None,
+    def _filter_flows(self, flows, country_names=None, sectors=None,
                       with_RoW=False):
         """
-        Filter a MultiIndexed pandas object by `from_country`, `to_country` and
+        Filter a MultiIndexed pandas object by `country_names` and
         `sectors`.
         
-        Both `country_names` and `sectors` can be None, a string or a
-        list of strings.
+        Both `country_names` and `sectors` can be None, a string or a list of
+        strings.
+        All of `to_country`, `from_country` and `country` are
+        filtered.
         """
         if country_names is None and sectors is None and with_RoW:
             return flows
@@ -707,10 +701,8 @@ class GlobalDemoModel(object):
             if sectors is None:
                 sectors = self.sectors
             # Level names on which to filter
-            sector_levels = [l for l in names 
-                if str(l).find('sector') >= 0]    
-            country_levels = [l for l in names 
-                if str(l).find('country') >= 0]
+            sector_levels = [l for l in names if str(l).find('sector') >= 0]    
+            country_levels = [l for l in names if str(l).find('country') >= 0]
             
             for level in sector_levels:
                 filtered = dataframe.filter_pandas(filtered, level, sectors)
@@ -728,7 +720,8 @@ class GlobalDemoModel(object):
         the given flows vector and the import propensities
         """
         ip = self._import_propensities.astype(float)
-        return dataframe.broadcast(self._import_propensities, flows)
+        flows = dataframe.rename_index_level(flows, {country_field:'to_country'})
+        return dataframe.broadcast(ip, flows)
         
     def _split_flows_by_import_ratios(self, flows, get_domestic,
                                       country_names=None):
@@ -738,7 +731,7 @@ class GlobalDemoModel(object):
         """
         # TODO: This section is a real mess, due to the fact that pandas
         # 0.13.0 can not join two MultiIndexed series.
-        d = self._filter_flows(self.import_ratios(), from_country=country_names, to_country=country_names)
+        d = self._filter_flows(self.import_ratios(), country_names=country_names)
         d = 1 - d if get_domestic else d
         return flows.mul(d, fill_value=0)
         

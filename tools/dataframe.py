@@ -30,7 +30,7 @@ def broadcast(x, y, binary_operator='mul', **kwargs):
     df = x.unstack(missing_names)
     try:
         y = y.reorder_levels(df.index.names).sortlevel()
-    except KeyError:
+    except KeyError, AssertionError:
         raise KeyError("Couldn't match levels of y with levels of x")
     df_fun = getattr(df, binary_operator)
     return df_fun(y, axis=0, **kwargs).stack(missing_names).reorder_levels(x.index.names).sortlevel()
@@ -117,3 +117,19 @@ def set_index_values(df_or_series, new_values, level):
     retval = retval.set_index(level, append=True).reorder_levels(levels).sortlevel().squeeze()
     return retval
 
+def rename_index_level(df_or_series, replace_dict):
+    """
+    Rename index levels on multi-indexed `df_or_series`
+
+    `replace_dict` is a dictionary whose keys are old values and whose values are new values
+    """
+    df_or_series = df_or_series.copy()
+    class value_or_key_if_missing(dict):
+        def __missing__(self, key):
+            return key
+    idx = df_or_series.index
+    _replace_dict = value_or_key_if_missing(replace_dict)
+    idx.names = [_replace_dict[name] for name in idx.names]
+    df_or_series.reindex(idx)
+    return df_or_series
+    
