@@ -366,7 +366,6 @@ class GlobalDemoModel(object):
         rescaled = rescaled / rescaled.sum()
         by_to_country[to_country].update(rescaled)
         p_s.update(by_to_country.swaplevel(0, 1).sortlevel())
-        return self.recalculate_world()
 
     def import_propensities_from_flows(self, flows_df, inplace=False):
         """
