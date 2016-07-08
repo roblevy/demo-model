@@ -7,6 +7,7 @@ from flask import Flask, render_template, request, make_response
 from flask.ext.cors import CORS
 from functools import update_wrapper
 import pandas as pd
+import math
 from demo_model.global_demo_model import GlobalDemoModel as gdm
 from demo_model.tools import sectors, dataframe, metrics
 import demo_model.trademodels.exportness as exportness
@@ -204,27 +205,42 @@ def change_trade_relationship(country1, country2, slider_value, sector_id=None, 
     and 1. Optionally a `sector_id` can be specified, in which case only the
     trade relationship for that sector will be adjusted.
 
-    Adjustments are made via import propensities. -1 sets the relevant
-    propensity to half its current value, and +1 halves the distance between
-    the current value and 1. Thus +1 turns 0.6 into 0.8 and 0.8 into 0.9.
+    Adjustments are made via import propensities in a way which allows subsequent
+    adjustments of, e.g. +0.5 and -0.5, to leave the final value where it was. 
     """
+
     print "Changing trade relationship"
-    print "country1: %s, country2: %s, value: %s, sector: %s" % (country1, country2, slider_value, sector_id)
+    print "country1: %s, country2: %s, value: %s, sector: %s" % (country1,
+            country2, slider_value, sector_id)
     sectors = sector_names_from_id(sector_id)
     for s in sectors:
         current_value = model.import_propensities()[s, country1, country2] 
-        # TODO: Set the new_value sensibly, rather than these silly values
-        if slider_value > 0:
-            new_value = 9999
-        else:
-            new_value = 0
+        new_value = import_propensity_from_slider_value(current_value, slider_value)
         model.set_import_propensity(s, country1, country2, new_value)
-
-
     # Do stuff
     print "Recalculating world..."
     model.recalculate_world()
     return json_status("ok")
+
+def import_propensity_from_slider_value(current_import_propensity, slider_value):
+    """
+    Transform the current import propensity using the logistic and inverse logistic functions.
+    We can restrict the value of the result to be between 0 and 1.  The value
+    associated with +1 we call `c` (-1 is then associated with 1 - c).
+    Call the slider value `x`. We then transform the initial import propensity
+    into inverse logistic space, add the slider value, and apply the logistic function
+    to the result.
+    """
+    c = 0.9
+    k = -math.log((1 - c) / c)
+    f = inverse_logistic(current_import_propensity, k)
+    return logistic(f + slider_value, k)
+
+def logistic(x, k):
+    return 1 / (1 + math.exp(-k * x))
+
+def inverse_logistic(x, k):
+    return -math.log((1 - x) / x) / k
 
 def parse_comma_separated_param(param):
     """
