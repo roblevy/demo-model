@@ -330,8 +330,8 @@ class GlobalDemoModel(object):
 
     def set_import_propensity(self, sector, from_country, to_country, value):
         """
-        Set the import propensity and rescale to ensure propensities from
-        all countries sum to unity
+        Set the import propensity and rescale the remaing import propensities
+        to ensure propensities from all countries sum to unity
 
         Parameters
         ----------
@@ -351,11 +351,21 @@ class GlobalDemoModel(object):
         p_s = self._import_propensities.ix[sector]
         p_s.ix[from_country, to_country] = value
         # TODO: Rationalise to another function?
+        # Currently not very elegant. Works by removing the import propensity
+        # associated with from_country, dividing by the sum of the remainder
+        # countries and multiplying by 1 - value. This ensures that, once the
+        # updated import propensity is added back in, all countries together
+        # sum to 1.
         by_to_country = p_s.swaplevel(0,1).sortlevel()
-        rescaled = by_to_country[to_country] / sum(by_to_country[to_country]) 
+        p_to_country = by_to_country[to_country]
+        remainder_countries = p_to_country[~p_to_country.index.isin([from_country])]
+        remainder_total = sum(remainder_countries) 
+        rescaled = p_to_country / remainder_total * (1 - value)
+        rescaled[from_country] = value
+        # Just to be sure, in case of rounding errors, rescale to sum to 1
+        rescaled = rescaled / rescaled.sum()
         by_to_country[to_country].update(rescaled)
         p_s.update(by_to_country.swaplevel(0, 1).sortlevel())
-        return self.recalculate_world()
 
     def import_propensities_from_flows(self, flows_df, inplace=False):
         """

@@ -199,9 +199,32 @@ def sector_names_from_id(sector_id, get_supersectors=False):
 
 def change_trade_relationship(country1, country2, slider_value, sector_id=None, **kwargs):
     """
+    Change a trading relationship between `country1` (exporter) and `country2`
+    (importer) according to `slider_value` which has arbitrary units between -1
+    and 1. Optionally a `sector_id` can be specified, in which case only the
+    trade relationship for that sector will be adjusted.
+
+    Adjustments are made via import propensities. -1 sets the relevant
+    propensity to half its current value, and +1 halves the distance between
+    the current value and 1. Thus +1 turns 0.6 into 0.8 and 0.8 into 0.9.
     """
     print "Changing trade relationship"
     print "country1: %s, country2: %s, value: %s, sector: %s" % (country1, country2, slider_value, sector_id)
+    sectors = sector_names_from_id(sector_id)
+    for s in sectors:
+        current_value = model.import_propensities()[s, country1, country2] 
+        # TODO: Set the new_value sensibly, rather than these silly values
+        if slider_value > 0:
+            new_value = 9999
+        else:
+            new_value = 0
+        model.set_import_propensity(s, country1, country2, new_value)
+
+
+    # Do stuff
+    print "Recalculating world..."
+    model.recalculate_world()
+    return json_status("ok")
 
 def parse_comma_separated_param(param):
     """
