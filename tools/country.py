@@ -291,10 +291,9 @@ def replace_iso3(df_or_list, column_name=None, index=False):
                     return _replace_iso3(df)
         else:
             if isinstance(column_name, basestring):
-                replace_dict = {column_name: ISO_DICT}
-            else:
-                replace_dict = {k: ISO_DICT for k in column_name}
-            retval =  pd.concat([_replace_series(df[col]) for col in df], axis=1)
+                column_name = [column_name]
+            new_cols = [_replace_series(df[col]) if col in column_name else df[col] for col in df]
+            retval =  pd.concat(new_cols, axis=1)
             return retval
     else:
         return [_replace_iso3(x) for x in df_or_list]

@@ -170,10 +170,11 @@ def heat_map(df, cmap_name='Blues'):
     ax.set_yticks(np.linspace(0, n-1, n))
     ax.set_yticklabels(df.index)
 
-def scatter_plot(df, xcol=0, ycol=1, labelled=True,
-                 ymin=0, ymax=None, xmin=0, xmax=None):
+def scatter_plot(df, xcol=0, ycol=1, labelled=True, regression_line=False,
+                 ymin=0, ymax=None, xmin=0, xmax=None, label_join=' ', **kwargs):
     """
     Create a new labelled scatter plot with data from `df`.
+    Keyword arguments are passed to df.plot
     
     Parameters
     ----------
@@ -185,19 +186,27 @@ def scatter_plot(df, xcol=0, ycol=1, labelled=True,
         The name (or index position) of the y column
     labelled: bool
         Add labels using the index of `df`
+    regression_line: bool
+        Add a regression line
+    label_join: string
+        Character to join index levels by for label if index has multiple
+        levels
     """
     fig, ax = plt.subplots()
     _set_fig_size(fig)
     df.plot(xcol, ycol, kind='scatter',
         ax=ax, c=range(len(df)),
-        colormap='Spectral', s=120, alpha=0.8,
+        colormap='Spectral', colorbar=False,
+        s=120, alpha=0.8,
         edgecolor='None', 
         ylim=[ymin, ymax], xlim=[xmin, xmax])
     if labelled:
-        ax = annotate_axes(ax, df, xcol, ycol)
+        ax = annotate_axes(ax, df, xcol, ycol, label_join)
+    if regression_line:
+        add_regression_line(ax, x=df[[xcol]].squeeze(), y=df[[ycol]].squeeze())
     return fig, ax
 
-def annotate_axes(ax, df, xcol=0, ycol=1):
+def annotate_axes(ax, df, xcol=0, ycol=1, label_join=' '):
     """
     Annotate the axes `ax` with the DataFrame `df`
     
@@ -218,6 +227,8 @@ def annotate_axes(ax, df, xcol=0, ycol=1):
         The name of the y column
     """
     for k, v in df.iterrows():
+        if isinstance(k, (tuple, list)):
+            k = label_join.join(k)
         ax.annotate(k, [v[xcol], v[ycol]],
                     xytext=(10,-5), textcoords='offset points',
                     family='sans-serif', fontsize=14, 
@@ -226,6 +237,9 @@ def annotate_axes(ax, df, xcol=0, ycol=1):
 
 def add_regression_line(ax, x, y):
     from pandas.stats.api import ols
+    # For some reason, ols doesn't like MultiIndexed series
+    y = y.reset_index(drop=True)
+    x = x.reset_index(drop=True)
     res = ols(y=y, x=x)
     add_straight_line(ax, m=res.beta['x'], c=res.beta['intercept'])
     annotate_regression_line(ax, res)
@@ -248,12 +262,20 @@ def annotate_regression_line(ax, ols_results):
     spacing = (y_max - y_min) / 30
     annotate(ax, "slope: %.2f" % m, [x, y])
     annotate(ax, "intercept: %.2f" % c, [x, y - spacing])
-    annotate(ax, "p-value: %.2g" % p, [x, y - 2 * spacing])
+    annotate(ax, "p-value: %.3f" % p, [x, y - 2 * spacing])
     
 def annotate(ax, text, xy):
     ax.annotate(text, xy,
                 color='0.8', fontsize=15, family='monospace',
                 horizontalalignment='right')
+
+def _get_xaxis_range(ax):
+    xlim = ax.get_xlim()
+    return xlim[1] - xlim[0]
+
+def _get_yaxis_range(ax):
+    ylim = ax.get_ylim()
+    return ylim[1] - ylim[0]
 
 def add_straight_line(ax, m, c):
     """
@@ -261,8 +283,12 @@ def add_straight_line(ax, m, c):
     to the axes `ax`
     """
     ax.set_autoscale_on(False)
-    x = ax.get_xlim()
-    y = [m * x_i + c for x_i in x]
+    if _get_xaxis_range(ax) > _get_yaxis_range(ax):
+        x = ax.get_xlim()
+        y = [m * x_i + c for x_i in x]
+    else:
+        y = ax.get_ylim()
+        x = [(y_i - c) / m for y_i in y]
     ax.plot(x, y, '0.8', linewidth=2, alpha=0.8, zorder=0)
     
 
